@@ -175,7 +175,10 @@ mod tests {
             "historyRetentionDays": 90, "authMethod": "key", "status": "offline"
         })).unwrap();
         let command = super::configured_ssh_command(&server, None).unwrap();
-        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().into_owned()).collect();
+        let args: Vec<String> = command
+            .get_argv()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
         assert!(args.windows(2).any(|pair| pair[0] == "-o" && pair[1] == "ControlMaster=no"));
         assert!(args.windows(2).any(|pair| pair[0] == "-o" && pair[1] == "ControlPath=none"));
     }
