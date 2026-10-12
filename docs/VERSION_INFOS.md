@@ -23,14 +23,23 @@
 - 非交互 SSH 缺少 libc_sec.so 时尝试已安装的 CANN 环境脚本；优先识别正常的 NPU，错误状态仍保留 NPU 工具的错误信息。
 - 远端历史补齐 NPU 利用率、HBM 占用、他人占用和按用户累计的使用量，与实时采集使用相同设备 UUID。
 - 无有效 HBM 容量的设备标为不可用，不作为健康空闲卡；保留原始 AI Core 活跃率。
+- Windows 启动时将 RackTop 及其后代进程加入带 `KILL_ON_JOB_CLOSE` 的 Job Object；正常退出、崩溃或被强制结束时，由系统回收 SSH 子进程，避免遗留连接持续占用内存。
 - NPU 卡片不再显示驱动未提供的 NVIDIA MBW 和 SM 指标；使用 AI Core 标签，既有 SM 展开状态在 NPU 上显示进程显存。
 - Windows 向 Linux 发送采集脚本前统一换行符；版本相关测试读取当前 package.json 版本。
 - 修复“空闲与告警通知”开关未写入 Rust 设置模型的问题；关闭后重新打开设置仍保持关闭状态，并继续抑制空闲与告警通知。
+- 采集超时取消等待时回收本机 SSH 子进程；磁盘采集失败后的自动采集在 15 分钟内跳过磁盘，手动刷新仍可立即重试。
+- 终端会话在切换详情标签、总览或服务器时继续保留；隐藏超过 1 小时自动关闭并在再次进入时重连。
+- 关闭窗口或退出 App 前主动关闭全部终端会话，并禁用终端 SSH 的 ControlPersist，避免留下 RackTop 自己启动的后台 SSH 进程。
+- 终端布局使用独立可伸缩容器，隐藏时暂停尺寸适配和焦点请求，返回时重新适配窗口尺寸。
+- 感谢贡献者 [March-7](https://github.com/March-7)：本次整合吸收其提出的 [Issue #37](https://github.com/Tongzh-SEU/RackTop/issues/37)、[PR #90](https://github.com/Tongzh-SEU/RackTop/pull/90)（SSH 超时回收与磁盘失败节流）和 [PR #91](https://github.com/Tongzh-SEU/RackTop/pull/91)（终端会话生命周期）中的有效修复，并按本项目版本策略归入 1.25.6。
+- 整合 [Issue #94](https://github.com/Tongzh-SEU/RackTop/issues/94) 与 [PR #98](https://github.com/Tongzh-SEU/RackTop/pull/98) 的通知开关持久化修复。
+- 整合 [Issue #95](https://github.com/Tongzh-SEU/RackTop/issues/95) 的 Windows Job Object 子进程回收修复；该修复目前由本次整合分支统一提交，尚未形成独立上游 PR。
 
 ### 验证记录
 
 - 2026-10-12 整合验证：新增 7 项实际执行 Shell 的回归测试，覆盖失败 NPU 回退至 NVIDIA/PPU、CANN 引用未设置变量、脚本主动退出、最后一个候选失败、NPU 正常优先及 NPU 单独失败时的诊断保留；这些测试在 macOS/Linux 执行，Windows 跳过。
-- 2026-10-12 macOS 整合分支：前端 251 项通过；Rust 99 项通过、3 项需要专用 SSH 服务器或数据库副本的测试跳过；TypeScript 检查与前端生产构建通过。构建有现存的大于 500 kB 分块警告。
+- 2026-10-12：`cargo check --manifest-path src-tauri/Cargo.toml` 通过；Windows Job Object 逻辑因当前 macOS 环境无法编译和实机验证，需在 Windows CI/安装包中验证异常退出后的 `ssh.exe` 回收。
+- 2026-10-12 macOS 整合分支：前端 266 项通过；Rust 103 项通过、3 项需要专用 SSH 服务器或数据库副本的测试跳过；TypeScript 检查与前端生产构建通过。构建有现存的大于 500 kB 分块警告。
 - 下列 Windows 安装与真实昇腾硬件记录来自原 PR 作者，不能视为此次整合版已重新完成的实机验证。
 - 上游修复分支：前端 244 项测试通过，TypeScript 与生产构建通过；Rust 86 项通过、1 项跨服务器测试因未指定服务器跳过。
 - 保留本地已有改动的 Windows 安装修复版：前端 247 项通过；Rust 92 项通过、1 项跨服务器测试跳过。修正了本地旧测试中与独立 OpenSSH 进程实现不一致的断言。
@@ -48,6 +57,7 @@
 - 本地安装版已有尚未合入上游的 Windows/Web 等改动，本次保留这些改动，PR 只提交基于上游 main 的 NPU 修复。
 - 本地安装包关闭 updater 产物签名生成，不作为正式自动更新包。未合并上游、未创建正式标签/Release、未发布四平台附件与更新清单，macOS 未构建验证。
 - 本次新增通知设置持久化回归测试；尚未在 Windows 原生设置界面复现验证。
+- 本次终端会话超时和 App 退出清理尚未在 Windows 原生窗口关闭路径上完成实机验证；当前没有可用的 Windows runner。
 - Mac 指定 /Volumes/Lenovo/RackTop 路径在当前跳板上不存在，因此使用独立 Windows 检出；上游写权限不可用，通过 Calix-L/RackTop fork 提交修复分支与 Draft PR。
 
 ### 升级说明

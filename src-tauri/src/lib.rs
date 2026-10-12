@@ -1,6 +1,7 @@
 pub mod collector;
 mod host_key;
 pub mod models;
+mod process_lifetime;
 mod project_sync;
 mod remote_history;
 mod ssh_config;
@@ -37,6 +38,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
+    WindowEvent,
 };
 use terminal::TerminalManager;
 
@@ -1302,7 +1304,8 @@ fn window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+fn window_close(window: tauri::WebviewWindow, terminals: State<'_, TerminalManager>) -> Result<(), String> {
+    terminals.close_all();
     window.close().map_err(|error| error.to_string())
 }
 
@@ -1313,6 +1316,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            if let Err(error) = process_lifetime::install() {
+                eprintln!("Windows 子进程生命周期隔离未启用：{error}");
+            }
             let app_data = app
                 .path()
                 .app_data_dir()
@@ -1402,6 +1408,11 @@ pub fn run() {
                 let _ = app.emit("app-menu-action", id);
             }
             _ => {}
+        })
+        .on_window_event(|window, event| {
+            if matches!(event, WindowEvent::CloseRequested { .. }) {
+                window.app_handle().state::<TerminalManager>().close_all();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             list_servers,
