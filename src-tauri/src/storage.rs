@@ -3502,7 +3502,20 @@ fn is_attributable_gpu_process(username: &str, command: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{GpuMetric, ProcessMetric, SystemMetric};
+    use crate::models::{AppSettings, GpuMetric, ProcessMetric, SystemMetric};
+
+    #[test]
+    fn app_notification_preference_persists_across_database_reads() {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("settings.sqlite")).unwrap();
+        let mut settings = AppSettings::default();
+        settings.idle_notifications_enabled = false;
+
+        database.save_settings(&settings).unwrap();
+        let restored = database.get_settings().unwrap();
+
+        assert!(!restored.idle_notifications_enabled);
+    }
 
     fn draft(name: &str, retention_days: u32) -> ServerDraft {
         ServerDraft {
