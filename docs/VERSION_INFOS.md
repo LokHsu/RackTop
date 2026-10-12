@@ -39,7 +39,7 @@
 
 - 2026-10-12 整合验证：新增 7 项实际执行 Shell 的回归测试，覆盖失败 NPU 回退至 NVIDIA/PPU、CANN 引用未设置变量、脚本主动退出、最后一个候选失败、NPU 正常优先及 NPU 单独失败时的诊断保留；这些测试在 macOS/Linux 执行，Windows 跳过。
 - 2026-10-12：`cargo check --manifest-path src-tauri/Cargo.toml` 通过；Windows Job Object 逻辑因当前 macOS 环境无法编译和实机验证，需在 Windows CI/安装包中验证异常退出后的 `ssh.exe` 回收。
-- 2026-10-12 macOS 整合分支：前端 251 项通过；Rust 99 项通过、3 项需要专用 SSH 服务器或数据库副本的测试跳过；TypeScript 检查与前端生产构建通过。构建有现存的大于 500 kB 分块警告。
+- 2026-10-12 macOS 整合分支：前端 266 项通过；Rust 103 项通过、3 项需要专用 SSH 服务器或数据库副本的测试跳过；TypeScript 检查与前端生产构建通过。构建有现存的大于 500 kB 分块警告。
 - 下列 Windows 安装与真实昇腾硬件记录来自原 PR 作者，不能视为此次整合版已重新完成的实机验证。
 - 上游修复分支：前端 244 项测试通过，TypeScript 与生产构建通过；Rust 86 项通过、1 项跨服务器测试因未指定服务器跳过。
 - 保留本地已有改动的 Windows 安装修复版：前端 247 项通过；Rust 92 项通过、1 项跨服务器测试跳过。修正了本地旧测试中与独立 OpenSSH 进程实现不一致的断言。
@@ -57,7 +57,7 @@
 - 本地安装版已有尚未合入上游的 Windows/Web 等改动，本次保留这些改动，PR 只提交基于上游 main 的 NPU 修复。
 - 本地安装包关闭 updater 产物签名生成，不作为正式自动更新包。未合并上游、未创建正式标签/Release、未发布四平台附件与更新清单，macOS 未构建验证。
 - 本次新增通知设置持久化回归测试；尚未在 Windows 原生设置界面复现验证。
-- 本次终端会话超时和 App 退出清理尚未在 Windows 原生窗口关闭路径上完成实机验证。
+- 本次终端会话超时和 App 退出清理尚未在 Windows 原生窗口关闭路径上完成实机验证；当前没有可用的 Windows runner。
 - Mac 指定 /Volumes/Lenovo/RackTop 路径在当前跳板上不存在，因此使用独立 Windows 检出；上游写权限不可用，通过 Calix-L/RackTop fork 提交修复分支与 Draft PR。
 
 ### 升级说明
