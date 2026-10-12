@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AppUpdateDialog } from './AppUpdateDialog'
+import { AppUpdateDialog, AppUpdateProgressButton, AppUpdateTriggerButton } from './AppUpdateDialog'
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -28,6 +28,39 @@ function renderDialog(phase: 'downloading' | 'installing' | 'error') {
 }
 
 describe('AppUpdateDialog', () => {
+  it('keeps the familiar circular update icon for the idle trigger', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const onClick = vi.fn()
+    root = createRoot(container)
+    act(() => root?.render(<AppUpdateTriggerButton version="1.25.6" onClick={onClick} />))
+    expect(container.querySelector('.brand__update-ring')).toBeNull()
+    expect(container.querySelector('.brand__update-icon')).not.toBeNull()
+    act(() => container.querySelector('button')?.click())
+    expect(onClick).toHaveBeenCalledOnce()
+  })
+
+  it('renders download progress as a compact blue ring with accessible progress', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => root?.render(<AppUpdateProgressButton state={{ phase: 'downloading', version: '1.25.6', downloadedBytes: 3, totalBytes: 4 }} />))
+    const progress = container.querySelector('[role="progressbar"]')
+    expect(progress?.getAttribute('aria-valuenow')).toBe('75')
+    expect(progress?.getAttribute('aria-label')).toContain('75%')
+    expect(container.querySelector('.brand__update-ring-value')?.getAttribute('stroke-dashoffset')).toBe(`${2 * Math.PI * 10 * .25}`)
+  })
+
+  it('keeps unknown-size downloads indeterminate without a false percentage', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => root?.render(<AppUpdateProgressButton state={{ phase: 'downloading', version: '1.25.6', downloadedBytes: 1, totalBytes: null }} />))
+    const progress = container.querySelector('[role="progressbar"]')
+    expect(progress?.hasAttribute('aria-valuenow')).toBe(false)
+    expect(container.querySelector('.brand__update-ring')?.classList.contains('is-indeterminate')).toBe(true)
+  })
+
   it('shows compact progress and no cancellation control while active', () => {
     const { container } = renderDialog('downloading')
     expect(container.textContent).toContain('正在下载 RackTop 1.25.4')

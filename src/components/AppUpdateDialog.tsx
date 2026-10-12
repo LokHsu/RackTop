@@ -1,4 +1,4 @@
-import { ExternalLink, RefreshCw, X } from 'lucide-react'
+import { CircleArrowUp, ExternalLink, RefreshCw, X } from 'lucide-react'
 import { appUpdatePercent, formatUpdateBytes, type AppUpdateState } from '../utils/appUpdate'
 
 interface AppUpdateDialogProps {
@@ -6,6 +6,43 @@ interface AppUpdateDialogProps {
   onClose: () => void
   onRetry: () => void
   onManualDownload: () => void
+}
+
+interface AppUpdateProgressButtonProps {
+  state: AppUpdateState
+}
+
+function UpdateRing({ value, indeterminate = false }: { value?: number; indeterminate?: boolean }) {
+  const circumference = 2 * Math.PI * 10
+  const offset = value === undefined ? undefined : circumference * (1 - value / 100)
+  return <svg className={`brand__update-ring${indeterminate ? ' is-indeterminate' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+    <circle className="brand__update-ring-track" cx="12" cy="12" r="10" />
+    {value !== undefined || indeterminate ? <circle className="brand__update-ring-value" cx="12" cy="12" r="10" strokeDasharray={circumference} strokeDashoffset={offset} /> : null}
+  </svg>
+}
+
+export function AppUpdateTriggerButton({ version, onClick }: { version: string; onClick: () => void }) {
+  return <button className="brand__update brand__update--trigger" onClick={onClick} aria-label={`有新版本 RackTop ${version}，点击下载并安装`} title={`更新到 RackTop ${version}`}>
+    <CircleArrowUp className="brand__update-icon" size={16} strokeWidth={2} />
+  </button>
+}
+
+export function AppUpdateProgressButton({ state }: AppUpdateProgressButtonProps) {
+  const percent = appUpdatePercent(state)
+  const determinate = percent !== null && state.phase === 'downloading'
+  const value = determinate ? Math.round(percent) : state.phase === 'installing' ? 100 : undefined
+  const label = state.phase === 'checking'
+    ? '正在检查更新'
+    : state.phase === 'installing'
+      ? `正在安装 RackTop ${state.version}`
+      : determinate
+        ? `正在下载 RackTop ${state.version}，已完成 ${value}%`
+        : `正在下载 RackTop ${state.version}`
+
+  return <span className="brand__update-progress" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value} title={label}>
+    <UpdateRing value={value} indeterminate={value === undefined} />
+    <CircleArrowUp className="brand__update-icon" size={16} strokeWidth={2} />
+  </span>
 }
 
 export function AppUpdateDialog({ state, onClose, onRetry, onManualDownload }: AppUpdateDialogProps) {

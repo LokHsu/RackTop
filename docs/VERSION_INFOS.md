@@ -34,6 +34,7 @@
 - 感谢贡献者 [March-7](https://github.com/March-7)：本次整合吸收其提出的 [Issue #37](https://github.com/Tongzh-SEU/RackTop/issues/37)、[PR #90](https://github.com/Tongzh-SEU/RackTop/pull/90)（SSH 超时回收与磁盘失败节流）和 [PR #91](https://github.com/Tongzh-SEU/RackTop/pull/91)（终端会话生命周期）中的有效修复，并按本项目版本策略归入 1.25.6。
 - 整合 [Issue #94](https://github.com/Tongzh-SEU/RackTop/issues/94) 与 [PR #98](https://github.com/Tongzh-SEU/RackTop/pull/98) 的通知开关持久化修复。
 - 整合 [Issue #95](https://github.com/Tongzh-SEU/RackTop/issues/95) 的 Windows Job Object 子进程回收修复；该修复目前由本次整合分支统一提交，尚未形成独立上游 PR。
+- 将应用内更新下载反馈改为品牌区更新图标外围的蓝色圆环进度，不再在下载和安装阶段阻塞显示独立进度弹窗；失败时仍保留重试与手动下载操作。
 
 ### 验证记录
 

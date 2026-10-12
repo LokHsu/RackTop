@@ -66,7 +66,7 @@ import { popupServerContextMenu } from './services/serverContextMenu'
 import type { AppSettings, DetailTab, GpuMemoryStallWarning, HistoryHeatmapPoint, HistoryPoint, HostKeyInfo, IdleReservation, IdleReservationFilters, InteractionLogSummary, LinkedProjectResourcePlan, Project, ProjectDraft, ProjectSyncProgress, RemoteHistorySyncResult, Server, ServerDraft, ServerNotificationCategory, ServerNotificationSettings, Snapshot } from './types/models'
 import { isRackTopManagedIdentity } from './utils/sshSetup'
 import { DeleteServerDialog } from './components/DeleteServerDialog'
-import { AppUpdateDialog } from './components/AppUpdateDialog'
+import { AppUpdateDialog, AppUpdateProgressButton, AppUpdateTriggerButton } from './components/AppUpdateDialog'
 import { HistoryHeatmaps, StorageWaffleList } from './components/HistoryHeatmap'
 import { MetricBar } from './components/MetricBar'
 import { ManagedProcessView, type ManagedLaunchIntent } from './components/ManagedProcessView'
@@ -295,15 +295,17 @@ function App() {
   const [showActivityLog, setShowActivityLog] = useState(false)
   const [showAbout, setShowAbout] = useState(browserPreviewState === 'about')
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | undefined>(() => {
-    if (browserPreviewState === 'update' || browserPreviewState === 'update-error') return { version: '1.25.4', url: releaseUrl('1.25.4') }
+    if (browserPreviewState === 'update' || browserPreviewState === 'update-available') return { version: '1.25.6', url: releaseUrl('1.25.6') }
+    if (browserPreviewState === 'update-error') return { version: '1.25.4', url: releaseUrl('1.25.4') }
     const release = loadCachedUpdate().release
     return release && isNewerVersion(release.version, packageInfo.version) ? release : undefined
   })
   const [appUpdateState, setAppUpdateState] = useState<AppUpdateState | null>(() => {
-    if (browserPreviewState === 'update') return { phase: 'downloading', version: '1.25.4', downloadedBytes: 6.8 * 1024 ** 2, totalBytes: 11.4 * 1024 ** 2 }
+    if (browserPreviewState === 'update-active') return { phase: 'downloading', version: '1.25.7', downloadedBytes: 6.8 * 1024 ** 2, totalBytes: 11.4 * 1024 ** 2 }
     if (browserPreviewState === 'update-error') return { phase: 'error', version: '1.25.4', downloadedBytes: 0, totalBytes: null, error: '无法连接 GitHub，请检查网络后重试。' }
     return null
   })
+  const previewUpdateTimerRef = useRef<number | null>(null)
   const desktopUpdateRef = useRef<DesktopAppUpdate | null>(null)
   const startupUpdateCheckStartedRef = useRef(false)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
@@ -674,7 +676,21 @@ function App() {
   const startAppUpdate = useCallback(async () => {
     const requestedVersion = latestRelease?.version ?? '1.25.4'
     if (!api.isDesktop) {
-      setAppUpdateState({ phase: 'downloading', version: requestedVersion, downloadedBytes: 6.8 * 1024 ** 2, totalBytes: 11.4 * 1024 ** 2 })
+      if (previewUpdateTimerRef.current !== null) window.clearInterval(previewUpdateTimerRef.current)
+      const totalBytes = 11.4 * 1024 ** 2
+      let downloadedBytes = 0
+      setAppUpdateState({ phase: 'downloading', version: requestedVersion, downloadedBytes, totalBytes })
+      previewUpdateTimerRef.current = window.setInterval(() => {
+        downloadedBytes = Math.min(totalBytes, downloadedBytes + totalBytes / 24)
+        if (downloadedBytes >= totalBytes) {
+          window.clearInterval(previewUpdateTimerRef.current ?? undefined)
+          previewUpdateTimerRef.current = null
+          setAppUpdateState({ phase: 'installing', version: requestedVersion, downloadedBytes: totalBytes, totalBytes })
+          window.setTimeout(() => setAppUpdateState(null), 1200)
+          return
+        }
+        setAppUpdateState({ phase: 'downloading', version: requestedVersion, downloadedBytes, totalBytes })
+      }, 180)
       return
     }
     let update = desktopUpdateRef.current
@@ -707,7 +723,12 @@ function App() {
     }
   }, [latestRelease?.version])
 
+  useEffect(() => () => {
+    if (previewUpdateTimerRef.current !== null) window.clearInterval(previewUpdateTimerRef.current)
+  }, [])
+
   useEffect(() => {
+    if (browserPreviewState === 'update' || browserPreviewState === 'update-active' || browserPreviewState === 'update-error') return
     let interval: number | undefined
     let timeout: number | undefined
     const runScheduledCheck = () => {
@@ -1646,7 +1667,8 @@ function App() {
               <div><strong>RackTop</strong><small>算力监控</small></div>
             </button>
             {checkingUpdate && <span className="brand__update brand__update--checking" aria-label="正在检查更新"><RefreshCw className="spin" size={15} /></span>}
-            {!checkingUpdate && shouldShowUpdateBadge(latestRelease?.version, ignoredUpdateVersion) && <button className="brand__update" onClick={() => void startAppUpdate()} aria-label={`下载并安装 RackTop ${latestRelease?.version}`} title={`更新到 RackTop ${latestRelease?.version}`}><CircleArrowUp size={16} /></button>}
+            {appUpdateState && appUpdateState.phase !== 'error' && <AppUpdateProgressButton state={appUpdateState} />}
+            {!checkingUpdate && !appUpdateState && (browserPreviewState === 'update' || browserPreviewState === 'update-available' || shouldShowUpdateBadge(latestRelease?.version, ignoredUpdateVersion)) && <AppUpdateTriggerButton version={latestRelease?.version ?? ''} onClick={() => void startAppUpdate()} />}
           </div>
         </div>
         <nav className="primary-nav" aria-label="主导航">
@@ -1771,7 +1793,7 @@ function App() {
       {showSettings && settings && <SettingsSheet settings={settings} onboardingVisible={!onboardingDismissed} onClose={() => setShowSettings(false)} onSave={async (value, showOnboarding) => { setSettings(await api.saveSettings(value)); if (showOnboarding) { localStorage.removeItem(ONBOARDING_DISMISSED_KEY); setOnboardingDismissed(false); setOnboardingUseActualState(true); setOnboardingCollapsed(false); if (onboardingDismissed) setMainView('fleet') } else { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true) } setShowSettings(false); setToast('设置已保存') }} />}
       {showActivityLog && <ActivityLogSheet servers={servers} snapshots={snapshots} onClose={() => setShowActivityLog(false)} />}
       {showAbout && <AboutSheet latestRelease={latestRelease} checkingUpdate={checkingUpdate} updateError={updateCheckError} ignoredVersion={ignoredUpdateVersion} onIgnoreUpdate={(version) => { saveIgnoredUpdateVersion(version); setIgnoredUpdateVersion(version); setToast(`已忽略 v${version} 的更新提示`) }} onCheckUpdate={() => void checkForUpdates(true)} onClose={() => setShowAbout(false)} onNotice={setToast} />}
-      {appUpdateState && <AppUpdateDialog state={appUpdateState} onClose={() => setAppUpdateState(null)} onRetry={() => {
+      {appUpdateState?.phase === 'error' && <AppUpdateDialog state={appUpdateState} onClose={() => setAppUpdateState(null)} onRetry={() => {
         const previous = desktopUpdateRef.current
         desktopUpdateRef.current = null
         if (previous) void previous.close().catch(() => {})
