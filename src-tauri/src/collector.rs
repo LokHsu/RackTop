@@ -81,7 +81,7 @@ fi;
 printf '__RACKTOP_USERCPU__\n'; ps -u "$(id -un)" -o pcpu= 2>/dev/null | awk -v n="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf 1)" '{s+=$1} END {printf "%.2f\n", (n>0?s/n:s+0)}';
 racktop_probe_npu;
 printf '__RACKTOP_ACCELERATOR__\n';
-if [ "$racktop_npu_status" -eq 0 ] || command -v npu-smi >/dev/null 2>&1; then racktop_accelerator=ascend; elif command -v nvidia-smi >/dev/null 2>&1; then racktop_accelerator=nvidia; elif command -v ppu-smi >/dev/null 2>&1; then racktop_accelerator=ppu; else racktop_accelerator=nvidia; fi;
+if [ "$racktop_npu_status" -eq 0 ]; then racktop_accelerator=ascend; elif command -v nvidia-smi >/dev/null 2>&1; then racktop_accelerator=nvidia; elif command -v ppu-smi >/dev/null 2>&1; then racktop_accelerator=ppu; elif command -v npu-smi >/dev/null 2>&1; then racktop_accelerator=ascend; else racktop_accelerator=nvidia; fi;
 printf '%s\n' "$racktop_accelerator";
 printf '__RACKTOP_NVIDIA__\n';
 if [ "$racktop_accelerator" = ascend ]; then

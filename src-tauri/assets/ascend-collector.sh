@@ -14,12 +14,25 @@ racktop_probe_npu() {
       /usr/local/Ascend/cann-8.5.0-beta.1/set_env.sh
     do
       [ -r "$racktop_cann_env" ] || continue
-      . "$racktop_cann_env" >/dev/null 2>&1 || true
-      command -v npu-smi >/dev/null 2>&1 || continue
-      racktop_npu_info="$(npu-smi info 2>&1)" && racktop_npu_status=0 || racktop_npu_status=$?
+      # Vendor environment scripts are not nounset-safe and may exit the shell.
+      # Keep their environment changes local to this probe, not the collector.
+      if racktop_npu_candidate_info="$(
+        set +u
+        . "$racktop_cann_env" >/dev/null 2>&1 || exit 1
+        command -v npu-smi >/dev/null 2>&1 || exit 127
+        npu-smi info 2>&1
+      )"; then
+        racktop_npu_info="$racktop_npu_candidate_info"
+        racktop_npu_status=0
+      else
+        racktop_npu_status=$?
+        [ -z "$racktop_npu_candidate_info" ] || racktop_npu_info="$racktop_npu_candidate_info"
+      fi
       [ "$racktop_npu_status" -eq 0 ] && break
     done
   fi
+  # Failure is reported through racktop_npu_status, not the shell return code.
+  return 0
 }
 
 racktop_npu_metrics() {

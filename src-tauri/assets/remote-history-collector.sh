@@ -34,7 +34,7 @@ swap_percent="$(awk '
 export LANG=C LC_ALL=C
 racktop_probe_npu
 racktop_accelerator=nvidia
-if [ "$racktop_npu_status" -eq 0 ] || command -v npu-smi >/dev/null 2>&1; then racktop_accelerator=ascend; fi
+if [ "$racktop_npu_status" -eq 0 ] || { ! command -v nvidia-smi >/dev/null 2>&1 && command -v npu-smi >/dev/null 2>&1; }; then racktop_accelerator=ascend; fi
 query_history_gpus() {
   if [ "$racktop_accelerator" = ascend ]; then
     [ "$racktop_npu_status" -eq 0 ] || return 1
