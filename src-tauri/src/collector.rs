@@ -269,6 +269,7 @@ pub(crate) fn configured_ssh_command_without_control(server: &Server, password: 
 
 fn configured_ssh_command_with_control(server: &Server, password: Option<&str>, _use_control_master: bool) -> Result<(Command, String), String> {
     let mut command = Command::new("ssh");
+    command.kill_on_drop(true);
     #[cfg(windows)]
     command.creation_flags(0x08000000);
     command.args(["-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2", "-o", "StrictHostKeyChecking=yes"]);
