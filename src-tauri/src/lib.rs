@@ -1,6 +1,7 @@
 pub mod collector;
 mod host_key;
 pub mod models;
+mod process_lifetime;
 mod project_sync;
 mod remote_history;
 mod ssh_config;
@@ -1315,6 +1316,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            if let Err(error) = process_lifetime::install() {
+                eprintln!("Windows 子进程生命周期隔离未启用：{error}");
+            }
             let app_data = app
                 .path()
                 .app_data_dir()

@@ -23,6 +23,7 @@
 - 非交互 SSH 缺少 libc_sec.so 时尝试已安装的 CANN 环境脚本；优先识别正常的 NPU，错误状态仍保留 NPU 工具的错误信息。
 - 远端历史补齐 NPU 利用率、HBM 占用、他人占用和按用户累计的使用量，与实时采集使用相同设备 UUID。
 - 无有效 HBM 容量的设备标为不可用，不作为健康空闲卡；保留原始 AI Core 活跃率。
+- Windows 启动时将 RackTop 及其后代进程加入带 `KILL_ON_JOB_CLOSE` 的 Job Object；正常退出、崩溃或被强制结束时，由系统回收 SSH 子进程，避免遗留连接持续占用内存。
 - NPU 卡片不再显示驱动未提供的 NVIDIA MBW 和 SM 指标；使用 AI Core 标签，既有 SM 展开状态在 NPU 上显示进程显存。
 - Windows 向 Linux 发送采集脚本前统一换行符；版本相关测试读取当前 package.json 版本。
 - 修复“空闲与告警通知”开关未写入 Rust 设置模型的问题；关闭后重新打开设置仍保持关闭状态，并继续抑制空闲与告警通知。
@@ -35,6 +36,7 @@
 ### 验证记录
 
 - 2026-10-12 整合验证：新增 7 项实际执行 Shell 的回归测试，覆盖失败 NPU 回退至 NVIDIA/PPU、CANN 引用未设置变量、脚本主动退出、最后一个候选失败、NPU 正常优先及 NPU 单独失败时的诊断保留；这些测试在 macOS/Linux 执行，Windows 跳过。
+- 2026-10-12：`cargo check --manifest-path src-tauri/Cargo.toml` 通过；Windows Job Object 逻辑因当前 macOS 环境无法编译和实机验证，需在 Windows CI/安装包中验证异常退出后的 `ssh.exe` 回收。
 - 2026-10-12 macOS 整合分支：前端 251 项通过；Rust 99 项通过、3 项需要专用 SSH 服务器或数据库副本的测试跳过；TypeScript 检查与前端生产构建通过。构建有现存的大于 500 kB 分块警告。
 - 下列 Windows 安装与真实昇腾硬件记录来自原 PR 作者，不能视为此次整合版已重新完成的实机验证。
 - 上游修复分支：前端 244 项测试通过，TypeScript 与生产构建通过；Rust 86 项通过、1 项跨服务器测试因未指定服务器跳过。
