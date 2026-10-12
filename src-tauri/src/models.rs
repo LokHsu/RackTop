@@ -536,6 +536,8 @@ pub struct AppSettings {
     pub idle_gpu_threshold: f64,
     pub idle_memory_threshold_mb: f64,
     pub idle_duration_minutes: u64,
+    #[serde(default = "default_true")]
+    pub idle_notifications_enabled: bool,
     pub temperature_threshold_celsius: f64,
     pub current_user_accent: String,
     pub theme: String,
@@ -570,6 +572,7 @@ impl Default for AppSettings {
             idle_gpu_threshold: 10.0,
             idle_memory_threshold_mb: 40960.0,
             idle_duration_minutes: 10,
+            idle_notifications_enabled: true,
             temperature_threshold_celsius: 85.0,
             current_user_accent: "#0a84ff".into(),
             theme: "system".into(),
@@ -607,5 +610,23 @@ mod tests {
         value.as_object_mut().unwrap().remove("fontSize");
         let settings: AppSettings = serde_json::from_value(value).unwrap();
         assert_eq!(settings.font_size, "standard");
+    }
+
+    #[test]
+    fn existing_settings_default_to_enabled_notifications() {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        value.as_object_mut().unwrap().remove("idleNotificationsEnabled");
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert!(settings.idle_notifications_enabled);
+    }
+
+    #[test]
+    fn notification_preference_round_trips_as_disabled() {
+        let mut settings = AppSettings::default();
+        settings.idle_notifications_enabled = false;
+        let value = serde_json::to_value(&settings).unwrap();
+        assert_eq!(value["idleNotificationsEnabled"], false);
+        let restored: AppSettings = serde_json::from_value(value).unwrap();
+        assert!(!restored.idle_notifications_enabled);
     }
 }
