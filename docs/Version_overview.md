@@ -18,6 +18,7 @@
 - Windows 使用 Job Object 回收 RackTop 启动的 SSH 子进程，减少 App 异常退出后的残留连接。
 - 修复空闲与告警通知开关持久化，关闭后重新打开仍保持关闭状态。
 - 整合贡献者 March-7 提出的 Issue #37 及 PR #90、PR #91 修复，并保持版本为 1.25.6。
+- 整合 Issue #94/PR #98 的通知开关修复，以及 Issue #95 的 Windows SSH 子进程回收修复。
 
 ## 1.25.5
 
