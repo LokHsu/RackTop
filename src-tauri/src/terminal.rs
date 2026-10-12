@@ -136,7 +136,7 @@ fn configured_ssh_command(server: &Server, password: Option<&str>) -> Result<Com
         command.args(["-o", "BatchMode=yes"]);
     }
     #[cfg(unix)]
-    command.args(["-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=/tmp/racktop-%C"]);
+    command.args(["-o", "ControlMaster=no", "-o", "ControlPath=none"]);
     if let Some(identity) = explicit_identity_file(server) {
         command.args(["-o", "IdentitiesOnly=yes"]);
         command.arg("-i");
@@ -164,6 +164,24 @@ mod tests {
         })).unwrap();
         let command = super::configured_ssh_command(&server, None).unwrap();
         assert_eq!(command.get_env("TERM"), Some(std::ffi::OsStr::new("xterm-256color")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn terminal_ssh_does_not_leave_a_persistent_control_master() {
+        let server: crate::models::Server = serde_json::from_value(serde_json::json!({
+            "id": "test", "name": "test", "host": "localhost", "port": 22,
+            "username": "test", "tags": [], "samplingIntervalSeconds": 5,
+            "historyRetentionDays": 90, "authMethod": "key", "status": "offline"
+        })).unwrap();
+        let command = super::configured_ssh_command(&server, None).unwrap();
+        let args: Vec<String> = command
+            .get_argv()
+            .iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.windows(2).any(|pair| pair[0] == "-o" && pair[1] == "ControlMaster=no"));
+        assert!(args.windows(2).any(|pair| pair[0] == "-o" && pair[1] == "ControlPath=none"));
     }
 
     #[test]
