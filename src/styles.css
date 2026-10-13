@@ -1165,7 +1165,7 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
 .detail-page:not(.detail-page--terminal) { width: calc(100% - 52px); }
 .gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid,
 .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid {
-  --card-min-width: 584px;
+  --card-min-width: var(--card-base-width, 584px);
   max-width: calc(3 * var(--card-min-width) + 2 * var(--card-gap, 12px));
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min-width)), var(--card-min-width)));
 }

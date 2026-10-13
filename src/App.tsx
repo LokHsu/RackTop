@@ -985,6 +985,11 @@ function App() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>('.app-shell')
     if (!root) return
+    // Freeze the original two-column width at the initial, unscaled window size.
+    // App zoom and later window resizing change how many cards fit, not their base width.
+    const sidebarWidth = Math.min(248, Math.max(220, window.innerWidth * 0.16))
+    const originalContentWidth = Math.min(1180, window.innerWidth - sidebarWidth - 52)
+    root.style.setProperty('--card-base-width', `${Math.max(0, (originalContentWidth - 12) / 2)}px`)
     let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
     const applyZoom = () => {
       // Keep layout geometry stable while scaling the application surface. CSS zoom
