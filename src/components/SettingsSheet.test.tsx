@@ -38,6 +38,22 @@ afterEach(() => {
 })
 
 describe('SettingsSheet onboarding settings', () => {
+  it('shows the current app zoom instead of font size and changes zoom immediately', async () => {
+    const onZoomChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(<SettingsSheet settings={settings} zoom={0.85} onZoomChange={onZoomChange} onboardingVisible onClose={vi.fn()} onSave={vi.fn()} />))
+    expect(container.textContent).not.toContain('字体大小')
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="设置界面缩放"]')!
+    expect(select.value).toBe('85')
+    expect([...select.options].map((option) => Number(option.value))).toEqual(Array.from({ length: 31 }, (_, i) => 50 + i * 5))
+    await act(async () => { select.value = '200'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+    expect(onZoomChange).toHaveBeenCalledWith(2)
+    await act(async () => { select.value = '50'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+    expect(onZoomChange).toHaveBeenLastCalledWith(0.5)
+  })
+
   it('keeps both onboarding switches in General and saves their values', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined)
     const container = document.createElement('div')

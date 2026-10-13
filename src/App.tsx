@@ -348,6 +348,7 @@ function App() {
   const [paused, setPaused] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [zoomNotice, setZoomNotice] = useState<number | null>(null)
+  const [uiZoom, setUiZoom] = useState(1)
   const zoomAdjustRef = useRef<(delta: number) => void>(() => {})
   const [remoteSyncStatus, setRemoteSyncStatus] = useState<RemoteSyncStatusState | null>(null)
   const [initialCollectionComplete, setInitialCollectionComplete] = useState(false)
@@ -976,29 +977,29 @@ function App() {
   useEffect(() => {
     if (!settings) return
     document.documentElement.dataset.theme = settings.theme
-    document.documentElement.dataset.fontSize = settings.fontSize
+    document.documentElement.dataset.fontSize = 'standard'
     document.documentElement.dataset.reduceMotion = settings.reduceMotion ? 'true' : 'false'
     document.documentElement.style.setProperty('--own-accent', settings.currentUserAccent)
   }, [settings])
 
   useEffect(() => {
-    if (!api.isDesktop) return
     const root = document.querySelector<HTMLElement>('.app-shell')
     if (!root) return
-    let zoom = Math.min(2, Math.max(0.5, Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1))
+    let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
     const applyZoom = () => {
       // Keep layout geometry stable while scaling the application surface. CSS zoom
       // changes grid measurement and causes masonry cards to overlap at non-100%.
       root.style.setProperty('--ui-zoom', String(zoom))
       root.style.setProperty('--ui-zoom-inverse', String(1 / zoom))
       localStorage.setItem('racktop.uiZoom', String(zoom))
+      setUiZoom(zoom)
       setZoomNotice(zoom)
     }
-    zoomAdjustRef.current = (delta) => { zoom = Math.min(2, Math.max(0.5, zoom + delta)); applyZoom() }
+    zoomAdjustRef.current = (delta) => { zoom = Math.min(2, Math.max(0.5, Math.round((zoom + delta) * 20) / 20)); applyZoom() }
     applyZoom()
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return
-      if (event.key === '-' || event.key === '=') { event.preventDefault(); zoom = Math.min(2, Math.max(0.5, zoom + (event.key === '-' ? -0.05 : 0.05))); applyZoom() }
+      if (event.key === '-' || event.key === '=' || event.key === '+') { event.preventDefault(); zoomAdjustRef.current(event.key === '-' ? -0.05 : 0.05) }
       else if (event.key === '0') { event.preventDefault(); zoom = 1; applyZoom() }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1718,6 +1719,7 @@ function App() {
             <h1>{mainView === 'projects' ? '我的项目' : mainView === 'idle' ? '寻找空闲算力' : mainView === 'mine' ? '我的进程' : mainView === 'fleet' ? '算力总览' : selectedServer ? serverDisplayName(selectedServer.name) : 'RackTop 总览'}</h1>
           </div>
           <div className="topbar__actions">
+            <ZoomSelect value={uiZoom} onChange={(next) => zoomAdjustRef.current(next - uiZoom)} label="顶部界面缩放" />
             {(manualRefreshProgress || (remoteHistoryServerKey && remoteSyncStatus)) && <span className="remote-sync-slot">{manualRefreshProgress ? <span className="remote-sync-status remote-sync-status--syncing" role="status" aria-live="polite">正在刷新全部 · {manualRefreshProgress.completed}/{manualRefreshProgress.total} 台</span> : remoteSyncStatus && <RemoteSyncStatus status={remoteSyncStatus} onOpenFailure={() => {
               const serverId = remoteSyncStatus.failedServerIds[0]
               if (!serverId) return
@@ -1790,7 +1792,7 @@ function App() {
       {projectEditor && <ProjectForm initial={projectEditor === 'new' ? null : projectEditor} projects={projects} servers={servers} activeSyncTargets={new Set([...busyProjectTargets, ...projectSyncProgress.map((progress) => `${progress.projectId}:${progress.targetServerId}`)])} onClose={() => setProjectEditor(null)} onSave={saveProject} />}
       {projectPendingDelete && <ProjectDeleteDialog project={projectPendingDelete} onClose={() => setProjectPendingDelete(null)} onDelete={async () => { await api.deleteProject(projectPendingDelete.id); setProjects((current) => current.filter((item) => item.id !== projectPendingDelete.id)); setProjectPendingDelete(null); setToast(`已移除“${projectPendingDelete.name}”的同步配置，服务器文件未删除`) }} />}
       {projectConflictTarget && <ProjectConflictDialog project={projectConflictTarget.project} server={servers.find((item) => item.id === projectConflictTarget.targetServerId)} onClose={() => setProjectConflictTarget(null)} onConfirm={() => { const pending = projectConflictTarget; setProjectConflictTarget(null); void syncProjectTarget(pending.project, pending.targetServerId, true, true) }} />}
-      {showSettings && settings && <SettingsSheet settings={settings} onboardingVisible={!onboardingDismissed} onClose={() => setShowSettings(false)} onSave={async (value, showOnboarding) => { setSettings(await api.saveSettings(value)); if (showOnboarding) { localStorage.removeItem(ONBOARDING_DISMISSED_KEY); setOnboardingDismissed(false); setOnboardingUseActualState(true); setOnboardingCollapsed(false); if (onboardingDismissed) setMainView('fleet') } else { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true) } setShowSettings(false); setToast('设置已保存') }} />}
+      {showSettings && settings && <SettingsSheet settings={settings} zoom={uiZoom} onZoomChange={(next) => zoomAdjustRef.current(next - uiZoom)} onboardingVisible={!onboardingDismissed} onClose={() => setShowSettings(false)} onSave={async (value, showOnboarding) => { setSettings(await api.saveSettings(value)); if (showOnboarding) { localStorage.removeItem(ONBOARDING_DISMISSED_KEY); setOnboardingDismissed(false); setOnboardingUseActualState(true); setOnboardingCollapsed(false); if (onboardingDismissed) setMainView('fleet') } else { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true) } setShowSettings(false); setToast('设置已保存') }} />}
       {showActivityLog && <ActivityLogSheet servers={servers} snapshots={snapshots} onClose={() => setShowActivityLog(false)} />}
       {showAbout && <AboutSheet latestRelease={latestRelease} checkingUpdate={checkingUpdate} updateError={updateCheckError} ignoredVersion={ignoredUpdateVersion} onIgnoreUpdate={(version) => { saveIgnoredUpdateVersion(version); setIgnoredUpdateVersion(version); setToast(`已忽略 v${version} 的更新提示`) }} onCheckUpdate={() => void checkForUpdates(true)} onClose={() => setShowAbout(false)} onNotice={setToast} />}
       {appUpdateState?.phase === 'error' && <AppUpdateDialog state={appUpdateState} onClose={() => setAppUpdateState(null)} onRetry={() => {
@@ -2606,7 +2608,11 @@ function IdleReservationCenter({ reservations, warnings, onClose, onEdit, onStat
   </div>
 }
 
-export function SettingsSheet({ settings, onboardingVisible, onClose, onSave }: { settings: AppSettings; onboardingVisible: boolean; onClose: () => void; onSave: (settings: AppSettings, showOnboarding: boolean) => Promise<void> }) {
+export function ZoomSelect({ value, onChange, label }: { value: number; onChange: (value: number) => void; label: string }) {
+  return <select className="zoom-select" aria-label={label} value={Math.round(value * 100)} onChange={(event) => onChange(Number(event.target.value) / 100)}>{Array.from({ length: 31 }, (_, index) => 50 + index * 5).map((percent) => <option key={percent} value={percent}>{percent}%</option>)}</select>
+}
+
+export function SettingsSheet({ settings, zoom = 1, onZoomChange = () => {}, onboardingVisible, onClose, onSave }: { settings: AppSettings; zoom?: number; onZoomChange?: (value: number) => void; onboardingVisible: boolean; onClose: () => void; onSave: (settings: AppSettings, showOnboarding: boolean) => Promise<void> }) {
   const [value, setValue] = useState(settings)
   const [showOnboarding, setShowOnboarding] = useState(onboardingVisible)
   const [saving, setSaving] = useState(false)
@@ -2622,7 +2628,7 @@ export function SettingsSheet({ settings, onboardingVisible, onClose, onSave }: 
         </SettingsGroup>
         <SettingsGroup icon={<SlidersHorizontal />} title="外观">
           <label>主题<select value={value.theme} onChange={(event) => set('theme', event.target.value as AppSettings['theme'])}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
-          <div className="settings-choice-row"><span><strong>字体大小</strong><small>大号在标准字号基础上增加 2px，不改变图表和固定控件尺寸</small></span><div className="segmented settings-mode" role="group" aria-label="字体大小"><button type="button" className={value.fontSize === 'standard' ? 'is-selected' : ''} aria-pressed={value.fontSize === 'standard'} onClick={() => set('fontSize', 'standard')}>标准</button><button type="button" className={value.fontSize === 'large' ? 'is-selected' : ''} aria-pressed={value.fontSize === 'large'} onClick={() => set('fontSize', 'large')}>大号</button></div></div>
+          <div className="settings-choice-row"><span><strong>界面缩放</strong><small>整体调整文字与卡片大小，立即生效并自动保存</small></span><ZoomSelect value={zoom} onChange={onZoomChange} label="设置界面缩放" /></div>
           <div className="settings-choice-row"><span><strong>菜单栏状态</strong><small>扩展模式固定显示待处理预约和异常进程数量</small></span><div className="segmented settings-mode" role="group" aria-label="菜单栏状态模式"><button type="button" className={value.menuBarMode === 'compact' ? 'is-selected' : ''} aria-pressed={value.menuBarMode === 'compact'} onClick={() => set('menuBarMode', 'compact')}>紧凑</button><button type="button" className={value.menuBarMode === 'expanded' ? 'is-selected' : ''} aria-pressed={value.menuBarMode === 'expanded'} onClick={() => set('menuBarMode', 'expanded')}>扩展</button></div></div>
           <label className="switch-row"><span><strong>我的任务标记色</strong><small>用于显存光标、你的任务标签与侧栏提示</small></span><input type="color" value={value.currentUserAccent} onChange={(event) => set('currentUserAccent', event.target.value)} /></label>
           <label className="switch-row"><span><strong>减少非必要动效</strong><small>也会自动尊重系统“减少动态效果”设置</small></span><input type="checkbox" checked={value.reduceMotion} onChange={(event) => set('reduceMotion', event.target.checked)} /></label>

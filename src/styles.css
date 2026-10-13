@@ -1153,6 +1153,8 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
   .sort-controls { justify-content: flex-end; }
 }
 
+.zoom-select { min-height: 30px; width: 82px; padding: 4px 7px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-secondary); background: var(--surface); font: inherit; font-variant-numeric: tabular-nums; }
+
 /* Size cards from their actual layout width, including the app zoom, and cap
    each row at three cards. Card internals retain their own column counts. */
 .detail-page:not(.detail-page--terminal) { width: calc(100% - 52px); }
