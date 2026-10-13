@@ -4,7 +4,7 @@
 
 ## 1.25.6 — 修复昇腾 NPU 状态采集
 
-- 修改时间：2026-10-12 21:15:38 +08:00
+- 修改时间：2026-10-13 14:11:48 +08:00
 - 发布日期：未正式发布；2026-10-02 本地 Windows 修复版已安装验证
 - 发布阶段：Bugfix / 整合验证版，尚未正式发布
 - 桌面平台：作者的 Windows x64 本地版已验证；整合版 macOS 自动化检查已验证，原生交互与 Windows 整合版未验证
@@ -35,9 +35,11 @@
 - 整合 [Issue #94](https://github.com/Tongzh-SEU/RackTop/issues/94) 与 [PR #98](https://github.com/Tongzh-SEU/RackTop/pull/98) 的通知开关持久化修复。
 - 整合 [Issue #95](https://github.com/Tongzh-SEU/RackTop/issues/95) 的 Windows Job Object 子进程回收修复；该修复目前由本次整合分支统一提交，尚未形成独立上游 PR。
 - 将应用内更新下载反馈改为品牌区更新图标外围的蓝色圆环进度，不再在下载和安装阶段阻塞显示独立进度弹窗；失败时仍保留重试与手动下载操作。
+- 更新圆环仅按真实下载百分比填充；检查更新及未知下载大小时保持灰环静止，移除循环旋转动画。
 
 ### 验证记录
 
+- 2026-10-13 更新圆环修正：更新组件 6 项测试、TypeScript 与前端生产构建通过；网页实际点击验证下载进度变化，圆弧无循环动画且箭头保持 16px；基于当前代码生成版本标记为 1.25.4 的 macOS 更新测试 App，Windows 本次未验证。
 - 2026-10-12 整合验证：新增 7 项实际执行 Shell 的回归测试，覆盖失败 NPU 回退至 NVIDIA/PPU、CANN 引用未设置变量、脚本主动退出、最后一个候选失败、NPU 正常优先及 NPU 单独失败时的诊断保留；这些测试在 macOS/Linux 执行，Windows 跳过。
 - 2026-10-12：`cargo check --manifest-path src-tauri/Cargo.toml` 通过；Windows Job Object 逻辑因当前 macOS 环境无法编译和实机验证，需在 Windows CI/安装包中验证异常退出后的 `ssh.exe` 回收。
 - 2026-10-12 macOS 整合分支：前端 266 项通过；Rust 103 项通过、3 项需要专用 SSH 服务器或数据库副本的测试跳过；TypeScript 检查与前端生产构建通过。构建有现存的大于 500 kB 分块警告。

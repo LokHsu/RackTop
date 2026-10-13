@@ -51,14 +51,15 @@ describe('AppUpdateDialog', () => {
     expect(container.querySelector('.brand__update-ring-value')?.getAttribute('stroke-dashoffset')).toBe(`${2 * Math.PI * 10 * .25}`)
   })
 
-  it('keeps unknown-size downloads indeterminate without a false percentage', () => {
+  it('keeps unknown-size downloads stationary without a false percentage', () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
     act(() => root?.render(<AppUpdateProgressButton state={{ phase: 'downloading', version: '1.25.6', downloadedBytes: 1, totalBytes: null }} />))
     const progress = container.querySelector('[role="progressbar"]')
     expect(progress?.hasAttribute('aria-valuenow')).toBe(false)
-    expect(container.querySelector('.brand__update-ring')?.classList.contains('is-indeterminate')).toBe(true)
+    expect(container.querySelector('.brand__update-ring-track')).not.toBeNull()
+    expect(container.querySelector('.brand__update-ring-value')).toBeNull()
   })
 
   it('shows compact progress and no cancellation control while active', () => {

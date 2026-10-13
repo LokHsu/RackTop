@@ -12,12 +12,12 @@ interface AppUpdateProgressButtonProps {
   state: AppUpdateState
 }
 
-function UpdateRing({ value, indeterminate = false }: { value?: number; indeterminate?: boolean }) {
+function UpdateRing({ value }: { value?: number }) {
   const circumference = 2 * Math.PI * 10
   const offset = value === undefined ? undefined : circumference * (1 - value / 100)
-  return <svg className={`brand__update-ring${indeterminate ? ' is-indeterminate' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+  return <svg className="brand__update-ring" viewBox="0 0 24 24" aria-hidden="true">
     <circle className="brand__update-ring-track" cx="12" cy="12" r="10" />
-    {value !== undefined || indeterminate ? <circle className="brand__update-ring-value" cx="12" cy="12" r="10" strokeDasharray={circumference} strokeDashoffset={offset} /> : null}
+    {value !== undefined ? <circle className="brand__update-ring-value" cx="12" cy="12" r="10" strokeDasharray={circumference} strokeDashoffset={offset} /> : null}
   </svg>
 }
 
@@ -40,7 +40,7 @@ export function AppUpdateProgressButton({ state }: AppUpdateProgressButtonProps)
         : `正在下载 RackTop ${state.version}`
 
   return <span className="brand__update-progress" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value} title={label}>
-    <UpdateRing value={value} indeterminate={value === undefined} />
+    <UpdateRing value={value} />
     <CircleArrowUp className="brand__update-icon" size={16} strokeWidth={2} />
   </span>
 }

@@ -100,11 +100,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .brand__update-ring { position: absolute; inset: 8px; z-index: 2; width: 16px; height: 16px; transform: rotate(90deg); pointer-events: none; }
 .brand__update-ring circle { fill: none; stroke-width: 2; }
 .brand__update-ring-track { stroke: var(--text-tertiary); }
-.brand__update-ring-value { stroke: var(--blue); stroke-width: 2; stroke-linecap: round; transition: stroke-dashoffset 240ms var(--ease-in-out); will-change: stroke-dashoffset; }
-.brand__update-ring.is-indeterminate .brand__update-ring-value { stroke-dasharray: 18 45; animation: brand-update-ring 1.05s linear infinite; }
+.brand__update-ring-value { stroke: var(--blue); stroke-width: 2; stroke-linecap: round; transition: stroke-dashoffset 160ms linear; }
 .brand__update-icon { position: relative; z-index: 1; }
-@keyframes brand-update-ring { to { transform: rotate(360deg); transform-origin: 12px 12px; } }
-@media (prefers-reduced-motion: reduce) { .brand__update-ring-value { transition: none; } .brand__update-ring.is-indeterminate .brand__update-ring-value { animation: none; stroke-dasharray: 40 23; } }
+@media (prefers-reduced-motion: reduce) { .brand__update-ring-value { transition: none; } }
 .about-sheet { width: min(520px, calc(100vw - 40px)); }
 .about-body { display: grid; gap: 14px; padding: 18px; overflow-y: auto; }
 .about-product, .about-author { display: flex; align-items: center; gap: 12px; }.about-product__mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 10px; color: white; background: var(--blue); }.about-product > div { display: grid; gap: 3px; }.about-product strong { font-size: calc(15px + var(--font-adjust, 0px)); }.about-product p { margin: 0; color: var(--text-tertiary); font-size: calc(10px + var(--font-adjust, 0px)); }
