@@ -73,7 +73,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .sidebar__titlebar { margin: -12px -10px 0; padding: 12px 10px 0; }
 .sidebar__titlebar > * { pointer-events: none; }
 .traffic-spacer { height: 0; }
-:root[data-platform="macos"] .sidebar--desktop .traffic-spacer { height: 22px; }
+:root[data-platform="macos"] .sidebar--desktop .traffic-spacer { height: max(0px, calc(34px * var(--ui-zoom-inverse, 1) - 12px)); flex-shrink: 0; }
 .brand-row { display: flex; align-items: center; gap: 4px; }
 .brand { display: flex; flex: 1 1 auto; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px 16px; border: 0; background: transparent; text-align: left; }
 .brand:focus { outline: none; }
@@ -1154,6 +1154,11 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
 }
 
 .zoom-select { min-height: 30px; width: 82px; padding: 4px 7px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-secondary); background: var(--surface); font: inherit; font-variant-numeric: tabular-nums; }
+.sheet { max-height: calc(100vh * var(--ui-zoom-inverse, 1) - 64px); }
+.about-sheet, .activity-log-sheet { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+.about-body, .activity-log-body { min-height: 0; overflow-y: auto; }
+.about-sheet > .sheet__header, .about-sheet > .sheet__footer,
+.activity-log-sheet > .sheet__header, .activity-log-sheet > .sheet__footer { position: static; }
 
 /* Size cards from their actual layout width, including the app zoom, and cap
    each row at three cards. Card internals retain their own column counts. */
