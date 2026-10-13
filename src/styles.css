@@ -558,6 +558,7 @@ button.gpu-card:active { transform: scale(.99); }
 .storage-waffle-grid i { display: block; aspect-ratio: 1; min-width: 0; border: 1px solid color-mix(in srgb, var(--border) 65%, transparent); border-radius: 2px; background: var(--surface-muted); }
 .storage-waffle-grid i.is-own { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); background: color-mix(in srgb, var(--green) 92%, var(--surface)); }
 .storage-waffle-grid i.is-other { border-color: color-mix(in srgb, var(--green) 20%, var(--border)); background: color-mix(in srgb, var(--green) 38%, var(--surface)); }
+.storage-waffle-grid i.is-used { background: var(--text-tertiary); }
 .storage-waffle-row__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; color: var(--text-tertiary); font-size: calc(9px + var(--font-adjust, 0px)); font-variant-numeric: tabular-nums; }
 .storage-waffle-row__footer span { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .storage-waffle-row__footer i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 2px; }

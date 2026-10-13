@@ -95,6 +95,7 @@ export function StorageWaffleList({ disks }: { disks: DiskMetric[] }) {
         <div className="storage-waffle-list">
           {disks.map((disk) => {
             const usedPercent = disk.totalBytes > 0 ? Math.min(100, disk.usedBytes / disk.totalBytes * 100) : 0
+            const ownershipKnown = disk.currentUserUsedBytes != null
             const ownBytes = Math.min(disk.usedBytes, Math.max(0, disk.currentUserUsedBytes ?? 0))
             const otherBytes = Math.max(0, disk.usedBytes - ownBytes)
             const usedCells = Math.round(usedPercent * 5)
@@ -103,12 +104,12 @@ export function StorageWaffleList({ disks }: { disks: DiskMetric[] }) {
             return (
               <div className="storage-waffle-row" key={disk.mountPoint}>
                 <strong className="storage-waffle-row__mount mono">{disk.mountPoint}</strong>
-                <div className="storage-waffle-grid" data-columns="100" data-rows="5" role="img" aria-label={`${disk.mountPoint} 你占用 ${formatStorage(ownBytes)}，其他占用 ${formatStorage(otherBytes)}，共 ${formatStorage(disk.totalBytes)}`}>
-                  {Array.from({ length: 500 }, (_, index) => <i className={index < ownCells ? 'is-own' : index < ownCells + otherCells ? 'is-other' : ''} data-storage-cell key={index} />)}
+                <div className="storage-waffle-grid" data-columns="100" data-rows="5" role="img" aria-label={ownershipKnown ? `${disk.mountPoint} 你占用 ${formatStorage(ownBytes)}，其他占用 ${formatStorage(otherBytes)}，共 ${formatStorage(disk.totalBytes)}` : `${disk.mountPoint} 已用 ${formatStorage(disk.usedBytes)}，用户占用暂无数据，共 ${formatStorage(disk.totalBytes)}`}>
+                  {Array.from({ length: 500 }, (_, index) => <i className={index < ownCells ? 'is-own' : index < ownCells + otherCells ? (ownershipKnown ? 'is-other' : 'is-used') : ''} data-storage-cell key={index} />)}
                 </div>
                 <div className="storage-waffle-row__footer">
-                  <span><i className="is-own" />你的 <strong>{formatStorage(ownBytes)}</strong></span>
-                  <span><i className="is-other" />其他 <strong>{formatStorage(otherBytes)}</strong></span>
+                  <span><i className="is-own" />你的 <strong>{ownershipKnown ? formatStorage(ownBytes) : '—'}</strong></span>
+                  <span><i className="is-other" />其他 <strong>{ownershipKnown ? formatStorage(otherBytes) : '—'}</strong></span>
                   <span>总计 <strong>{formatStorage(disk.totalBytes)}</strong> · {usedPercent.toFixed(1)}%</span>
                 </div>
               </div>

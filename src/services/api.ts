@@ -390,6 +390,10 @@ export const api = {
     browserInteractionSummary.servers = browserInteractionSummary.servers.map((item) => item.serverId === serverId ? { ...item, lastFinishedAt: Date.now(), responseBytes: item.responseBytes + responseBytes, storedBytes: item.storedBytes + storedBytes, status: 'success' } : item)
     return snapshot
   },
+  async collectDiskUsage(serverId: string, mounts: string[]): Promise<Record<string, number>> {
+    if (isTauri) return invoke('collect_disk_usage', { serverId, mounts })
+    return Object.fromEntries((browserSnapshotFor(serverId).disks ?? []).filter((disk) => mounts.includes(disk.mountPoint) && disk.currentUserUsedBytes != null).map((disk) => [disk.mountPoint, disk.currentUserUsedBytes!]))
+  },
   async getInteractionLogSummary(): Promise<InteractionLogSummary> {
     return isTauri ? invoke('get_interaction_log_summary') : { ...browserInteractionSummary, servers: browserInteractionSummary.servers.map((item) => ({ ...item })) }
   },

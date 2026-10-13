@@ -377,6 +377,7 @@ function App() {
   const lastAttemptAt = useRef<Record<string, number>>({})
   const lastProcessAttemptAt = useRef<Record<string, number>>({})
   const lastDiskAttemptAt = useRef<Record<string, number>>({})
+  const diskUsageInFlight = useRef(new Set<string>())
   const lastHistoryRecordedAt = useRef<Record<string, number>>({})
   const remoteHistoryServersRef = useRef<Server[]>([])
   const remoteSyncInFlight = useRef(new Set<string>())
@@ -521,6 +522,22 @@ function App() {
         saveIgnoredNvidiaWarningIds(retainedNvidiaWarnings)
       }
       setSnapshots((current) => ({ ...current, [serverId]: snapshot }))
+      if (includeDisks && snapshot.disks?.length && !diskUsageInFlight.current.has(serverId)) {
+        const diskAttempt = lastDiskAttemptAt.current[serverId]
+        diskUsageInFlight.current.add(serverId)
+        void api.collectDiskUsage(serverId, snapshot.disks.map((disk) => disk.mountPoint)).then((usage) => {
+          if (deletedServerIds.current.has(serverId) || lastDiskAttemptAt.current[serverId] !== diskAttempt) return
+          const latest = snapshotsRef.current[serverId]
+          if (!latest) return
+          const updated = { ...latest, disks: latest.disks?.map((disk) => ({
+            ...disk, currentUserUsedBytes: usage[disk.mountPoint] == null ? null : Math.min(disk.usedBytes, usage[disk.mountPoint]),
+          })) }
+          snapshotsRef.current = { ...snapshotsRef.current, [serverId]: updated }
+          setSnapshots((current) => ({ ...current, [serverId]: updated }))
+        }).catch(() => {
+          // Optional disk ownership must not change connection status or retry cadence.
+        }).finally(() => diskUsageInFlight.current.delete(serverId))
+      }
       setServers((current) => current.map((server) => server.id === serverId ? { ...server, status: displayedNvidiaServerStatus(snapshot, retainedNvidiaWarnings.has(serverId)), lastSeenAt: snapshot.timestamp, lastError: snapshot.nvidiaMessage } : server))
       if (recordHistory) {
         lastHistoryRecordedAt.current[serverId] = nowMs

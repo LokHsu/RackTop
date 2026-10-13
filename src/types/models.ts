@@ -133,7 +133,7 @@ export interface DiskMetric {
   usedBytes: number
   totalBytes: number
   availableBytes: number
-  currentUserUsedBytes?: number
+  currentUserUsedBytes?: number | null
 }
 
 export interface HistoryPoint {

@@ -275,7 +275,7 @@ pub struct DiskMetric {
     pub total_bytes: u64,
     pub available_bytes: u64,
     #[serde(default)]
-    pub current_user_used_bytes: u64,
+    pub current_user_used_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

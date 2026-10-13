@@ -59,23 +59,12 @@ printf '__RACKTOP_LOAD__\n'; cat /proc/loadavg;
 printf '__RACKTOP_MEM__\n'; grep -E '^(MemTotal|MemAvailable|SwapTotal|SwapFree):' /proc/meminfo;
 if [ "${RACKTOP_INCLUDE_DISKS:-1}" = "1" ]; then
   printf '__RACKTOP_DISK__\n';
-  current_user="$(id -un)";
-  home_mount="$(df -P -k "$HOME" 2>/dev/null | awk 'NR == 2 {print $6}')";
-  home_used="$(du -skx "$HOME" 2>/dev/null | awk '{print $1; exit}')"; home_used="${home_used:-0}";
   if ! disk_rows="$(timeout -k 1 3 df -P -k -x tmpfs -x devtmpfs 2>/dev/null)"; then
-    disk_rows="$(df -P -k -l -x tmpfs -x devtmpfs 2>/dev/null)";
+    disk_rows="$(timeout -k 1 3 df -P -k -l -x tmpfs -x devtmpfs 2>/dev/null || true)";
   fi;
   printf '%s\n' "$disk_rows" | awk 'NR > 1 && $2 ~ /^[0-9]+$/ { print $6 "|" $3 "|" $2 "|" $4 }' | while IFS='|' read -r mount used total available; do
     case "$mount" in /sys|/sys/*|/proc|/proc/*|/dev|/dev/*|/run|/run/*|/boot/efi|/boot/efi/*|/snap/*|/var/lib/docker/*|/var/lib/containers/*|/var/lib/kubelet/*) continue ;; esac
-    own=0;
-    if [ "$mount" = "$home_mount" ]; then own="$home_used";
-    else
-      for candidate in "$mount/$current_user" "$mount/home/$current_user"; do
-        if [ -d "$candidate" ]; then own="$(du -skx "$candidate" 2>/dev/null | awk '{print $1; exit}')"; own="${own:-0}"; break; fi;
-      done;
-    fi;
-    [ "$own" -gt "$used" ] 2>/dev/null && own="$used";
-    printf '%s|%s|%s|%s|%s\n' "$mount" "$used" "$total" "$available" "$own";
+    printf '%s|%s|%s|%s\n' "$mount" "$used" "$total" "$available";
   done | head -n 16;
 fi;
 printf '__RACKTOP_USERCPU__\n'; ps -u "$(id -un)" -o pcpu= 2>/dev/null | awk -v n="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf 1)" '{s+=$1} END {printf "%.2f\n", (n>0?s/n:s+0)}';
@@ -212,6 +201,60 @@ pub async fn collect_with_password_detailed(server: &Server, password: Option<&s
 
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+// Runs on a separate SSH request: slow directory traversal never gates a snapshot.
+const DISK_USAGE_SCRIPT: &str = r#"
+export LANG=C LC_ALL=C
+current_user="$(id -un)"
+home_mount="$(df -P -k "$HOME" 2>/dev/null | awk 'NR == 2 {print $6}')"
+index=0
+for mount do
+  candidate=''
+  if [ "$mount" = "$home_mount" ]; then candidate="$HOME"
+  else
+    for path in "$mount/$current_user" "$mount/home/$current_user"; do
+      if [ -d "$path" ]; then candidate="$path"; break; fi
+    done
+  fi
+  if [ -n "$candidate" ]; then
+    if result="$(du -skx "$candidate" 2>/dev/null)"; then
+      size="$(printf '%s\n' "$result" | awk 'NR == 1 {print $1}')"
+      case "$size" in ''|*[!0-9]*) ;; *) printf '%s|%s\n' "$index" "$size" ;; esac
+    fi
+  fi
+  index=$((index + 1))
+done
+"#;
+
+pub async fn collect_disk_usage(server: &Server, password: Option<&str>, mounts: &[String]) -> Result<std::collections::HashMap<String, u64>, String> {
+    if mounts.len() > 16 || mounts.iter().any(|mount| !mount.starts_with('/') || mount.contains(['\n', '\r', '\0'])) {
+        return Err("磁盘挂载路径无效".into());
+    }
+    let (mut command, target) = configured_ssh_command(server, password)?;
+    // The lock is inherited by du: even an uninterruptible NFS read cannot spawn
+    // another traversal on the next refresh. No stale mkdir lock to remove.
+    let script = format!(
+        "mkdir -p \"$HOME/.racktop\" && flock -n \"$HOME/.racktop/.disk-usage.lock\" timeout -k 1 20 sh -c {} racktop-du {}",
+        shell_quote(DISK_USAGE_SCRIPT), mounts.iter().map(|mount| shell_quote(mount)).collect::<Vec<_>>().join(" "),
+    );
+    command.arg(target).arg(script).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let output = timeout(Duration::from_secs(30), command.output()).await
+        .map_err(|_| "用户目录统计超时，基础监控不受影响".to_string())?
+        .map_err(|error| format!("无法启动目录统计：{error}"))?;
+    let values = parse_disk_usage(&String::from_utf8_lossy(&output.stdout), mounts);
+    if values.is_empty() && !output.status.success() {
+        return Err("用户目录统计未完成，基础监控不受影响".into());
+    }
+    Ok(values)
+}
+
+fn parse_disk_usage(output: &str, mounts: &[String]) -> std::collections::HashMap<String, u64> {
+    output.lines().filter_map(|line| {
+        let (index, kb) = line.split_once('|')?;
+        let mount = mounts.get(index.parse::<usize>().ok()?)?;
+        Some((mount.clone(), kb.parse::<u64>().ok()?.saturating_mul(1024)))
+    }).collect()
 }
 
 pub(crate) fn explicit_identity_file(server: &Server) -> Option<&str> {
@@ -416,8 +459,8 @@ fn parse_disk(line: &str) -> Result<DiskMetric, String> {
     let total_kb = fields[2].parse::<u64>().map_err(|_| "磁盘总空间无效".to_string())?;
     let available_kb = fields[3].parse::<u64>().map_err(|_| "磁盘可用空间无效".to_string())?;
     if total_kb == 0 || used_kb > total_kb { return Err("磁盘容量范围无效".into()); }
-    let current_user_used_kb = fields.get(4).and_then(|value| value.parse::<u64>().ok()).unwrap_or_default().min(used_kb);
-    Ok(DiskMetric { mount_point: fields[0].to_string(), used_bytes: used_kb.saturating_mul(1024), total_bytes: total_kb.saturating_mul(1024), available_bytes: available_kb.saturating_mul(1024), current_user_used_bytes: current_user_used_kb.saturating_mul(1024) })
+    let current_user_used_bytes = fields.get(4).and_then(|value| value.parse::<u64>().ok()).map(|value| value.min(used_kb).saturating_mul(1024));
+    Ok(DiskMetric { mount_point: fields[0].to_string(), used_bytes: used_kb.saturating_mul(1024), total_bytes: total_kb.saturating_mul(1024), available_bytes: available_kb.saturating_mul(1024), current_user_used_bytes })
 }
 
 fn is_visible_disk_mount(mount: &str) -> bool {
@@ -820,7 +863,8 @@ mod tests {
         let disk = parse_disk("/mnt/data|250000|1000000|750000|50000").unwrap();
         assert_eq!(disk.used_bytes, 250_000 * 1024);
         assert_eq!(disk.total_bytes, 1_000_000 * 1024);
-        assert_eq!(disk.current_user_used_bytes, 50_000 * 1024);
+        assert_eq!(disk.current_user_used_bytes, Some(50_000 * 1024));
+        assert_eq!(parse_disk("/data|4|10|6").unwrap().current_user_used_bytes, None);
         assert!(parse_disk("/sys/firmware/efi/efivars|1|10|9|0").is_err());
         assert!(parse_disk("/boot/efi|1|10|9|0").is_err());
         assert!(parse_disk("/home|4|10|6|1").is_ok());
@@ -981,6 +1025,16 @@ mod tests {
     fn disk_collection_falls_back_to_local_filesystems_when_a_network_mount_stalls() {
         assert!(REMOTE_SCRIPT.contains("timeout -k 1 3 df -P -k -x tmpfs -x devtmpfs"));
         assert!(REMOTE_SCRIPT.contains("df -P -k -l -x tmpfs -x devtmpfs"));
+        assert!(!REMOTE_SCRIPT.contains("du -"));
+    }
+
+    #[test]
+    fn disk_usage_accepts_partial_results_without_inventing_zeroes() {
+        let mounts = vec!["/data".to_string(), "/nfs".to_string()];
+        let result = parse_disk_usage("0|42\n1|invalid\n9|100\n", &mounts);
+        assert_eq!(result.get("/data"), Some(&(42 * 1024)));
+        assert!(!result.contains_key("/nfs"));
+        assert_eq!(parse_disk_usage("0|0\n", &mounts).get("/data"), Some(&0));
     }
 
     #[test]
