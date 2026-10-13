@@ -1153,6 +1153,20 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
   .sort-controls { justify-content: flex-end; }
 }
 
+/* Size cards from their actual layout width, including the app zoom, and cap
+   each row at three cards. Card internals retain their own column counts. */
+.detail-page:not(.detail-page--terminal) { width: min(1480px, calc(100% - 52px)); }
+.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid,
+.history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid {
+  --card-min-width: 340px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(var(--card-min-width), calc((100% - 2 * var(--card-gap, 12px)) / 3))), 1fr));
+}
+.gpu-detail-list { --card-min-width: 320px; --card-gap: 10px; }
+.resource-trend-grid { --card-min-width: 420px; --card-gap: 10px; }
+.history-heatmap-list, .usage-waffle-list { --card-gap: 10px; }
+.fleet-grid { --card-min-width: 400px; grid-auto-flow: row; }
+.fleet-grid > .masonry-item { grid-column: auto; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
   .sheet, .toast { transform: none !important; }
