@@ -1162,17 +1162,41 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
 
 /* Size cards from their actual layout width, including the app zoom, and cap
    each row at three cards. Card internals retain their own column counts. */
-.detail-page:not(.detail-page--terminal) { width: calc(100% - 52px); }
+.detail-page:not(.detail-page--terminal):has(.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid, .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid) {
+  width: min(var(--card-page-width, 1180px), calc(100% - 52px));
+}
 .gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid,
 .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid {
   --card-min-width: var(--card-base-width, 584px);
   max-width: calc(3 * var(--card-min-width) + 2 * var(--card-gap, 12px));
+  justify-content: center;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min-width)), var(--card-min-width)));
 }
 .gpu-detail-list, .resource-trend-grid { --card-gap: 10px; }
 .history-heatmap-list, .usage-waffle-list { --card-gap: 10px; }
 .fleet-grid { grid-auto-flow: row; }
 .fleet-grid > .masonry-item { grid-column: auto; }
+
+/* Above 100%, retain the stable release's flexible two-column layout. */
+.app-shell[data-zoom-layout="enlarged"] :is(.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid, .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid) {
+  max-width: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container (max-width: 808px) {
+  .app-shell[data-zoom-layout="enlarged"] :is(.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid, .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fleet-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fleet-summary > span:nth-child(4) { border-right: 0; }
+  .fleet-summary > span:nth-child(-n+4) { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .fleet-summary > span:nth-child(n+5) { padding-top: 10px; }
+}
+@container (max-width: 440px) {
+  .fleet-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fleet-summary > span:nth-child(2n) { border-right: 0; }
+  .fleet-summary > span:nth-child(-n+6) { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .fleet-summary > span:nth-child(n+3) { padding-top: 10px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }

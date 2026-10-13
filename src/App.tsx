@@ -986,16 +986,31 @@ function App() {
     const root = document.querySelector<HTMLElement>('.app-shell')
     if (!root) return
     // Freeze the original two-column width at the initial, unscaled window size.
-    // App zoom and later window resizing change how many cards fit, not their base width.
+    // At or below 100%, resizing changes the column count, not the base width.
+    // Above 100%, CSS uses the stable release's flexible card widths instead.
     const sidebarWidth = Math.min(248, Math.max(220, window.innerWidth * 0.16))
     const originalContentWidth = Math.min(1180, window.innerWidth - sidebarWidth - 52)
-    root.style.setProperty('--card-base-width', `${Math.max(0, (originalContentWidth - 12) / 2)}px`)
+    const cardWidth = Math.max(1, (originalContentWidth - 12) / 2)
+    root.style.setProperty('--card-base-width', `${cardWidth}px`)
     let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
+    // Observe the available workspace, not the fitted page, to avoid a resize loop.
+    const workspace = root.querySelector<HTMLElement>('.workspace')
+    const fitCardPage = () => {
+      if (!workspace) return
+      const availableWidth = Math.max(0, workspace.clientWidth - 52)
+      const columns = Math.max(1, Math.min(3, Math.floor((availableWidth + 12) / (cardWidth + 12))))
+      root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : columns * cardWidth + (columns - 1) * 12}px`)
+    }
+    const cardLayoutObserver = new ResizeObserver(fitCardPage)
+    if (workspace) cardLayoutObserver.observe(workspace)
+    fitCardPage()
     const applyZoom = () => {
       // Keep layout geometry stable while scaling the application surface. CSS zoom
       // changes grid measurement and causes masonry cards to overlap at non-100%.
       root.style.setProperty('--ui-zoom', String(zoom))
       root.style.setProperty('--ui-zoom-inverse', String(1 / zoom))
+      root.dataset.zoomLayout = zoom > 1 ? 'enlarged' : 'fixed'
+      fitCardPage()
       localStorage.setItem('racktop.uiZoom', String(zoom))
       setUiZoom(zoom)
       setZoomNotice(zoom)
@@ -1008,7 +1023,7 @@ function App() {
       else if (event.key === '0') { event.preventDefault(); zoom = 1; applyZoom() }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => { window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); zoomAdjustRef.current = () => {} }
+    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-base-width'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {} }
   }, [])
 
   useEffect(() => {
