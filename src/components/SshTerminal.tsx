@@ -32,7 +32,11 @@ export function SshTerminal({ serverId, serverName, gpuIndex, acceleratorVendor 
     if (!containerRef.current) return
     const container = containerRef.current
     let disposed = false
-    const terminal = new Terminal({ cursorBlink: true, convertEol: false, fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: 12, lineHeight: 1.3, scrollback: 5000, theme: { background: '#101114', foreground: '#e7e8ea', cursor: '#79aaff', selectionBackground: '#45658a88' } })
+    const scaledFontSize = () => {
+      const zoom = Number.parseFloat(getComputedStyle(container).getPropertyValue('--ui-zoom'))
+      return 12 * (Number.isFinite(zoom) && zoom > 0 ? zoom : 1)
+    }
+    const terminal = new Terminal({ cursorBlink: true, convertEol: false, fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: scaledFontSize(), lineHeight: 1.3, scrollback: 5000, theme: { background: '#101114', foreground: '#e7e8ea', cursor: '#79aaff', selectionBackground: '#45658a88' } })
     const fit = new FitAddon()
     terminal.loadAddon(fit)
     terminal.open(container)
@@ -46,6 +50,8 @@ export function SshTerminal({ serverId, serverName, gpuIndex, acceleratorVendor 
       fitFrame = requestAnimationFrame(() => {
         fitFrame = null
         if (disposed || !activeRef.current) return
+        const fontSize = scaledFontSize()
+        if (terminal.options.fontSize !== fontSize) terminal.options.fontSize = fontSize
         fit.fit()
         const id = sessionRef.current
         if (id) void api.resizeTerminal(id, terminal.cols, terminal.rows)
@@ -163,7 +169,7 @@ export function SshTerminal({ serverId, serverName, gpuIndex, acceleratorVendor 
   return <section className="terminal-shell" aria-label={`${serverName} SSH 终端`}>
     <header><span className={`terminal-status terminal-status--${status}`} /><strong>{gpuIndex === undefined ? serverName : `${serverName} · GPU ${gpuIndex}`}</strong><small>{!api.isDesktop ? '本地模拟 · 无 SSH 连接' : status === 'connecting' ? '正在连接' : status === 'connected' ? '已连接' : status === 'error' ? '连接失败' : '已断开'}</small><button className="icon-button" aria-label="重新连接终端" title="重新连接" onClick={() => { setError(null); setStatus('connecting'); setRestart((value) => value + 1) }}><RefreshCw size={14} /></button></header>
     {error && <div className="terminal-error" role="alert"><AlertCircle size={15} /><span>{error}</span><button onClick={() => setError(null)} aria-label="关闭错误"><X size={13} /></button></div>}
-    <div className="terminal-canvas" ref={containerRef} />
+    <div className="terminal-canvas"><div className="terminal-surface" ref={containerRef} /></div>
     {confirmation && <div className="terminal-confirm" role="alertdialog" aria-modal="true"><div><strong>确认 GPU 绑定</strong><p>{confirmation}。命令仍停留在远端输入行，尚未执行。</p></div><button className="button button--secondary button--small" onClick={() => confirmPending(false)}>暂不执行</button><button className="button button--primary button--small" onClick={() => confirmPending(true)}>仍然执行</button></div>}
   </section>
 }

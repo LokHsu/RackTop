@@ -382,10 +382,24 @@ pub fn parse_snapshot(server_id: &str, output: &str) -> Result<Snapshot, String>
         "missing" => Some("服务器未检测到 nvidia-smi、npu-smi 或 ppu-smi；可能没有受支持的加速卡，或驱动工具未安装/不在 PATH 中。".into()),
         _ => Some(nvidia_lines.iter().skip(1).cloned().collect::<Vec<_>>().join("\n").trim().to_string()).filter(|value| !value.is_empty()).or_else(|| Some(format!("{accelerator_tool} 存在但无法执行，请检查驱动和权限。"))),
     };
-    let gpus: Vec<GpuMetric> = sections
+    let mut gpus: Vec<GpuMetric> = sections
         .get("GPU")
         .map(|lines| lines.iter().filter_map(|line| parse_gpu(line).ok()).collect::<Vec<_>>())
         .unwrap_or_default();
+    // NVIDIA GB10/DGX Spark exposes a unified CPU/GPU memory pool. Its
+    // nvidia-smi memory.used/memory.total fields are intentionally [N/A], so
+    // use the host memory pool only for this known unified-memory device.
+    for gpu in &mut gpus {
+        if is_unified_memory_gpu(&gpu.name) && gpu.memory_total_mb <= 0.0 && system.memory_total_bytes > 0 {
+            gpu.memory_total_mb = system.memory_total_bytes as f64 / 1024.0 / 1024.0;
+            gpu.memory_used_mb = system.memory_used_bytes as f64 / 1024.0 / 1024.0;
+            gpu.memory_utilization = if gpu.memory_total_mb > 0.0 {
+                (gpu.memory_used_mb / gpu.memory_total_mb * 100.0).clamp(0.0, 100.0)
+            } else {
+                0.0
+            };
+        }
+    }
     let ps = parse_ps(sections.get("PS"));
     let pmon = parse_pmon(sections.get("GPUPMON"));
     let processes = parse_gpu_processes(sections.get("GPUPROC"), &gpus, &ps, &pmon, &username);
@@ -428,6 +442,11 @@ fn split_sections(output: &str) -> HashMap<String, Vec<String>> {
 
 fn first_line<'a>(sections: &'a HashMap<String, Vec<String>>, key: &str) -> Option<&'a str> { sections.get(key)?.first().map(String::as_str) }
 fn parse_number(value: &str) -> f64 { value.trim().parse().unwrap_or(0.0) }
+
+fn is_unified_memory_gpu(name: &str) -> bool {
+    let normalized = name.to_ascii_lowercase();
+    normalized.contains("gb10") || normalized.contains("dgx spark")
+}
 
 fn parse_cpu(line: &str) -> Result<(u64, u64), String> {
     let values: Vec<u64> = line.split_whitespace().skip(1).map(|value| value.parse().unwrap_or(0)).collect();
@@ -864,6 +883,34 @@ mod tests {
         assert!(REMOTE_SCRIPT.contains("clocks.current.sm,clocks.current.memory,pstate,fan.speed"));
         assert!(REMOTE_SCRIPT.contains("clocks_event_reasons.active,ecc.errors.uncorrected.aggregate.total"));
         assert!(REMOTE_SCRIPT.contains("clocks_throttle_reasons.active,ecc.errors.uncorrected.aggregate.total"));
+    }
+
+    #[test]
+    fn estimates_gb10_unified_memory_from_host_pool() {
+        let output = SAMPLE
+            .replace("gpu-box", "dgx-spark")
+            .replace(
+                "0, NVIDIA GeForce RTX 4090 D, GPU-abc, 25, 10, 2048, 24564, 48, 110.5",
+                "0, NVIDIA GB10, GPU-abc, 25, 0, [N/A], [N/A], 48, 110.5",
+            );
+        let snapshot = parse_snapshot("server-1", &output).unwrap();
+        let gpu = &snapshot.gpus[0];
+        assert_eq!(gpu.name, "NVIDIA GB10");
+        assert_eq!(gpu.memory_total_mb, 100_000.0 / 1024.0);
+        assert_eq!(gpu.memory_used_mb, 25_000.0 / 1024.0);
+        assert!((gpu.memory_utilization - 25.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn keeps_unknown_gpu_memory_unknown() {
+        let output = SAMPLE.replace(
+            "0, NVIDIA GeForce RTX 4090 D, GPU-abc, 25, 10, 2048, 24564, 48, 110.5",
+            "0, NVIDIA Future GPU, GPU-abc, 25, 0, [N/A], [N/A], 48, 110.5",
+        );
+        let snapshot = parse_snapshot("server-1", &output).unwrap();
+        assert_eq!(snapshot.gpus[0].memory_total_mb, 0.0);
+        assert_eq!(snapshot.gpus[0].memory_used_mb, 0.0);
+        assert_eq!(snapshot.gpus[0].memory_utilization, 0.0);
     }
 
     #[test]

@@ -38,6 +38,40 @@ afterEach(() => {
 })
 
 describe('SettingsSheet onboarding settings', () => {
+  it('shows the current app zoom instead of font size and changes zoom immediately', async () => {
+    const onZoomChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(<SettingsSheet settings={settings} zoom={0.85} onZoomChange={onZoomChange} onboardingVisible onClose={vi.fn()} onSave={vi.fn()} />))
+    expect(container.textContent).not.toContain('字体大小')
+    const slider = container.querySelector<HTMLInputElement>('[aria-label="设置界面缩放"]')!
+    expect(slider.type).toBe('range')
+    expect(slider.value).toBe('85')
+    expect([slider.min, slider.max, slider.step]).toEqual(['50', '200', '5'])
+    const setNativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => { setNativeValue.call(slider, '200'); slider.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(onZoomChange).toHaveBeenCalledWith(2)
+    await act(async () => { setNativeValue.call(slider, '50'); slider.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(onZoomChange).toHaveBeenLastCalledWith(0.5)
+  })
+
+  it('defaults to three cards and saves the selected maximum', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(<SettingsSheet settings={settings} onboardingVisible onClose={vi.fn()} onSave={onSave} />))
+    const select = [...container.querySelectorAll('label')].find((label) => label.textContent?.includes('每行最多卡片数'))!.querySelector('select')!
+    expect(select.value).toBe('3')
+    expect([...select.options].map((option) => option.value)).toEqual(['2', '3', '4', '5'])
+    expect([...select.options].map((option) => option.textContent)).toEqual(['2 片', '3 片', '4 片', '5 片'])
+    await act(async () => { select.value = '5'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+    const save = [...container.querySelectorAll('button')].find((button) => button.textContent === '保存设置')!
+    await act(async () => save.click())
+    expect(onSave).toHaveBeenCalledWith({ ...settings, maxCardsPerRow: 5 }, true)
+  })
+
   it('keeps both onboarding switches in General and saves their values', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined)
     const container = document.createElement('div')

@@ -46,7 +46,7 @@ vi.mock('@xterm/xterm', () => ({ Terminal: class {
   rows = 24
   disposed = false
   output = ''
-  constructor() { harness.terminals.push(this) }
+  constructor(public options: { fontSize?: number }) { harness.terminals.push(this) }
   loadAddon() {}
   open() {}
   focus = vi.fn()

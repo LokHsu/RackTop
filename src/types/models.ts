@@ -217,6 +217,7 @@ export interface AppSettings {
   currentUserAccent: string
   theme: 'system' | 'light' | 'dark'
   fontSize: 'standard' | 'large'
+  maxCardsPerRow?: number
   menuBarMode: 'compact' | 'expanded'
   reduceMotion: boolean
   showAddServerGuide: boolean

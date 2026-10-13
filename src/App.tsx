@@ -66,7 +66,7 @@ import { popupServerContextMenu } from './services/serverContextMenu'
 import type { AppSettings, DetailTab, GpuMemoryStallWarning, HistoryHeatmapPoint, HistoryPoint, HostKeyInfo, IdleReservation, IdleReservationFilters, InteractionLogSummary, LinkedProjectResourcePlan, Project, ProjectDraft, ProjectSyncProgress, RemoteHistorySyncResult, Server, ServerDraft, ServerNotificationCategory, ServerNotificationSettings, Snapshot } from './types/models'
 import { isRackTopManagedIdentity } from './utils/sshSetup'
 import { DeleteServerDialog } from './components/DeleteServerDialog'
-import { AppUpdateDialog } from './components/AppUpdateDialog'
+import { AppUpdateDialog, AppUpdateProgressButton, AppUpdateTriggerButton } from './components/AppUpdateDialog'
 import { HistoryHeatmaps, StorageWaffleList } from './components/HistoryHeatmap'
 import { MetricBar } from './components/MetricBar'
 import { ManagedProcessView, type ManagedLaunchIntent } from './components/ManagedProcessView'
@@ -295,15 +295,17 @@ function App() {
   const [showActivityLog, setShowActivityLog] = useState(false)
   const [showAbout, setShowAbout] = useState(browserPreviewState === 'about')
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | undefined>(() => {
-    if (browserPreviewState === 'update' || browserPreviewState === 'update-error') return { version: '1.25.4', url: releaseUrl('1.25.4') }
+    if (browserPreviewState === 'update' || browserPreviewState === 'update-available') return { version: '1.25.6', url: releaseUrl('1.25.6') }
+    if (browserPreviewState === 'update-error') return { version: '1.25.4', url: releaseUrl('1.25.4') }
     const release = loadCachedUpdate().release
     return release && isNewerVersion(release.version, packageInfo.version) ? release : undefined
   })
   const [appUpdateState, setAppUpdateState] = useState<AppUpdateState | null>(() => {
-    if (browserPreviewState === 'update') return { phase: 'downloading', version: '1.25.4', downloadedBytes: 6.8 * 1024 ** 2, totalBytes: 11.4 * 1024 ** 2 }
+    if (browserPreviewState === 'update-active') return { phase: 'downloading', version: '1.25.7', downloadedBytes: 6.8 * 1024 ** 2, totalBytes: 11.4 * 1024 ** 2 }
     if (browserPreviewState === 'update-error') return { phase: 'error', version: '1.25.4', downloadedBytes: 0, totalBytes: null, error: '无法连接 GitHub，请检查网络后重试。' }
     return null
   })
+  const previewUpdateTimerRef = useRef<number | null>(null)
   const desktopUpdateRef = useRef<DesktopAppUpdate | null>(null)
   const startupUpdateCheckStartedRef = useRef(false)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
@@ -346,7 +348,9 @@ function App() {
   const [paused, setPaused] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [zoomNotice, setZoomNotice] = useState<number | null>(null)
+  const [uiZoom, setUiZoom] = useState(1)
   const zoomAdjustRef = useRef<(delta: number) => void>(() => {})
+  const cardLayoutRefreshRef = useRef<(maximum: number) => void>(() => {})
   const [remoteSyncStatus, setRemoteSyncStatus] = useState<RemoteSyncStatusState | null>(null)
   const [initialCollectionComplete, setInitialCollectionComplete] = useState(false)
   const [remoteSyncRetryRevision, setRemoteSyncRetryRevision] = useState(0)
@@ -674,7 +678,21 @@ function App() {
   const startAppUpdate = useCallback(async () => {
     const requestedVersion = latestRelease?.version ?? '1.25.4'
     if (!api.isDesktop) {
-      setAppUpdateState({ phase: 'downloading', version: requestedVersion, downloadedBytes: 6.8 * 1024 ** 2, totalBytes: 11.4 * 1024 ** 2 })
+      if (previewUpdateTimerRef.current !== null) window.clearInterval(previewUpdateTimerRef.current)
+      const totalBytes = 11.4 * 1024 ** 2
+      let downloadedBytes = 0
+      setAppUpdateState({ phase: 'downloading', version: requestedVersion, downloadedBytes, totalBytes })
+      previewUpdateTimerRef.current = window.setInterval(() => {
+        downloadedBytes = Math.min(totalBytes, downloadedBytes + totalBytes / 24)
+        if (downloadedBytes >= totalBytes) {
+          window.clearInterval(previewUpdateTimerRef.current ?? undefined)
+          previewUpdateTimerRef.current = null
+          setAppUpdateState({ phase: 'installing', version: requestedVersion, downloadedBytes: totalBytes, totalBytes })
+          window.setTimeout(() => setAppUpdateState(null), 1200)
+          return
+        }
+        setAppUpdateState({ phase: 'downloading', version: requestedVersion, downloadedBytes, totalBytes })
+      }, 180)
       return
     }
     let update = desktopUpdateRef.current
@@ -707,7 +725,12 @@ function App() {
     }
   }, [latestRelease?.version])
 
+  useEffect(() => () => {
+    if (previewUpdateTimerRef.current !== null) window.clearInterval(previewUpdateTimerRef.current)
+  }, [])
+
   useEffect(() => {
+    if (browserPreviewState === 'update' || browserPreviewState === 'update-active' || browserPreviewState === 'update-error') return
     let interval: number | undefined
     let timeout: number | undefined
     const runScheduledCheck = () => {
@@ -955,34 +978,64 @@ function App() {
   useEffect(() => {
     if (!settings) return
     document.documentElement.dataset.theme = settings.theme
-    document.documentElement.dataset.fontSize = settings.fontSize
+    document.documentElement.dataset.fontSize = 'standard'
     document.documentElement.dataset.reduceMotion = settings.reduceMotion ? 'true' : 'false'
     document.documentElement.style.setProperty('--own-accent', settings.currentUserAccent)
   }, [settings])
 
   useEffect(() => {
-    if (!api.isDesktop) return
     const root = document.querySelector<HTMLElement>('.app-shell')
     if (!root) return
-    let zoom = Math.min(2, Math.max(0.5, Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1))
+    // Freeze the original two-column width at the initial, unscaled window size.
+    // At or below 100%, resizing changes the column count, not the base width.
+    // Above 100%, CSS uses the stable release's flexible card widths instead.
+    const sidebarWidth = Math.min(248, Math.max(220, window.innerWidth * 0.16))
+    const originalContentWidth = Math.min(1180, window.innerWidth - sidebarWidth - 52)
+    const cardWidth = Math.max(1, (originalContentWidth - 12) / 2)
+    root.style.setProperty('--card-base-width', `${cardWidth}px`)
+    let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
+    let maxCardsPerRow = 3
+    // Observe the available workspace, not the fitted page, to avoid a resize loop.
+    const workspace = root.querySelector<HTMLElement>('.workspace')
+    const fitCardPage = () => {
+      if (!workspace) return
+      const availableWidth = Math.max(0, workspace.clientWidth - 52)
+      const columns = Math.max(1, Math.min(maxCardsPerRow, Math.floor((availableWidth + 12) / (cardWidth + 12))))
+      root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : columns * cardWidth + (columns - 1) * 12}px`)
+    }
+    const cardLayoutObserver = new ResizeObserver(fitCardPage)
+    cardLayoutRefreshRef.current = (maximum) => {
+      maxCardsPerRow = Number.isFinite(maximum) ? Math.max(2, Math.min(5, Math.round(maximum))) : 3
+      root.style.setProperty('--max-card-columns', String(maxCardsPerRow))
+      fitCardPage()
+    }
+    if (workspace) cardLayoutObserver.observe(workspace)
+    fitCardPage()
     const applyZoom = () => {
       // Keep layout geometry stable while scaling the application surface. CSS zoom
       // changes grid measurement and causes masonry cards to overlap at non-100%.
       root.style.setProperty('--ui-zoom', String(zoom))
       root.style.setProperty('--ui-zoom-inverse', String(1 / zoom))
+      root.dataset.zoomLayout = zoom > 1 ? 'enlarged' : 'fixed'
+      fitCardPage()
       localStorage.setItem('racktop.uiZoom', String(zoom))
+      setUiZoom(zoom)
       setZoomNotice(zoom)
     }
-    zoomAdjustRef.current = (delta) => { zoom = Math.min(2, Math.max(0.5, zoom + delta)); applyZoom() }
+    zoomAdjustRef.current = (delta) => { zoom = Math.min(2, Math.max(0.5, Math.round((zoom + delta) * 20) / 20)); applyZoom() }
     applyZoom()
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return
-      if (event.key === '-' || event.key === '=') { event.preventDefault(); zoom = Math.min(2, Math.max(0.5, zoom + (event.key === '-' ? -0.05 : 0.05))); applyZoom() }
+      if (event.key === '-' || event.key === '=' || event.key === '+') { event.preventDefault(); zoomAdjustRef.current(event.key === '-' ? -0.05 : 0.05) }
       else if (event.key === '0') { event.preventDefault(); zoom = 1; applyZoom() }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => { window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); zoomAdjustRef.current = () => {} }
+    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-base-width'); root.style.removeProperty('--max-card-columns'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {}; cardLayoutRefreshRef.current = () => {} }
   }, [])
+
+  useEffect(() => {
+    cardLayoutRefreshRef.current(settings?.maxCardsPerRow ?? 3)
+  }, [settings?.maxCardsPerRow])
 
   useEffect(() => {
     if (zoomNotice === null) return
@@ -1646,7 +1699,8 @@ function App() {
               <div><strong>RackTop</strong><small>算力监控</small></div>
             </button>
             {checkingUpdate && <span className="brand__update brand__update--checking" aria-label="正在检查更新"><RefreshCw className="spin" size={15} /></span>}
-            {!checkingUpdate && shouldShowUpdateBadge(latestRelease?.version, ignoredUpdateVersion) && <button className="brand__update" onClick={() => void startAppUpdate()} aria-label={`下载并安装 RackTop ${latestRelease?.version}`} title={`更新到 RackTop ${latestRelease?.version}`}><CircleArrowUp size={16} /></button>}
+            {appUpdateState && appUpdateState.phase !== 'error' && <AppUpdateProgressButton state={appUpdateState} />}
+            {!checkingUpdate && !appUpdateState && (browserPreviewState === 'update' || browserPreviewState === 'update-available' || shouldShowUpdateBadge(latestRelease?.version, ignoredUpdateVersion)) && <AppUpdateTriggerButton version={latestRelease?.version ?? ''} onClick={() => void startAppUpdate()} />}
           </div>
         </div>
         <nav className="primary-nav" aria-label="主导航">
@@ -1768,10 +1822,10 @@ function App() {
       {projectEditor && <ProjectForm initial={projectEditor === 'new' ? null : projectEditor} projects={projects} servers={servers} activeSyncTargets={new Set([...busyProjectTargets, ...projectSyncProgress.map((progress) => `${progress.projectId}:${progress.targetServerId}`)])} onClose={() => setProjectEditor(null)} onSave={saveProject} />}
       {projectPendingDelete && <ProjectDeleteDialog project={projectPendingDelete} onClose={() => setProjectPendingDelete(null)} onDelete={async () => { await api.deleteProject(projectPendingDelete.id); setProjects((current) => current.filter((item) => item.id !== projectPendingDelete.id)); setProjectPendingDelete(null); setToast(`已移除“${projectPendingDelete.name}”的同步配置，服务器文件未删除`) }} />}
       {projectConflictTarget && <ProjectConflictDialog project={projectConflictTarget.project} server={servers.find((item) => item.id === projectConflictTarget.targetServerId)} onClose={() => setProjectConflictTarget(null)} onConfirm={() => { const pending = projectConflictTarget; setProjectConflictTarget(null); void syncProjectTarget(pending.project, pending.targetServerId, true, true) }} />}
-      {showSettings && settings && <SettingsSheet settings={settings} onboardingVisible={!onboardingDismissed} onClose={() => setShowSettings(false)} onSave={async (value, showOnboarding) => { setSettings(await api.saveSettings(value)); if (showOnboarding) { localStorage.removeItem(ONBOARDING_DISMISSED_KEY); setOnboardingDismissed(false); setOnboardingUseActualState(true); setOnboardingCollapsed(false); if (onboardingDismissed) setMainView('fleet') } else { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true) } setShowSettings(false); setToast('设置已保存') }} />}
+      {showSettings && settings && <SettingsSheet settings={settings} zoom={uiZoom} onZoomChange={(next) => zoomAdjustRef.current(next - uiZoom)} onboardingVisible={!onboardingDismissed} onClose={() => setShowSettings(false)} onSave={async (value, showOnboarding) => { setSettings(await api.saveSettings(value)); if (showOnboarding) { localStorage.removeItem(ONBOARDING_DISMISSED_KEY); setOnboardingDismissed(false); setOnboardingUseActualState(true); setOnboardingCollapsed(false); if (onboardingDismissed) setMainView('fleet') } else { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true) } setShowSettings(false); setToast('设置已保存') }} />}
       {showActivityLog && <ActivityLogSheet servers={servers} snapshots={snapshots} onClose={() => setShowActivityLog(false)} />}
       {showAbout && <AboutSheet latestRelease={latestRelease} checkingUpdate={checkingUpdate} updateError={updateCheckError} ignoredVersion={ignoredUpdateVersion} onIgnoreUpdate={(version) => { saveIgnoredUpdateVersion(version); setIgnoredUpdateVersion(version); setToast(`已忽略 v${version} 的更新提示`) }} onCheckUpdate={() => void checkForUpdates(true)} onClose={() => setShowAbout(false)} onNotice={setToast} />}
-      {appUpdateState && <AppUpdateDialog state={appUpdateState} onClose={() => setAppUpdateState(null)} onRetry={() => {
+      {appUpdateState?.phase === 'error' && <AppUpdateDialog state={appUpdateState} onClose={() => setAppUpdateState(null)} onRetry={() => {
         const previous = desktopUpdateRef.current
         desktopUpdateRef.current = null
         if (previous) void previous.close().catch(() => {})
@@ -1862,7 +1916,7 @@ function ServerDetail({ server, snapshot, points, settings, tab, selectedGpuUuid
     onTab(nextTab)
   }
   return (
-    <div className={`detail-page ${tab === 'terminal' ? 'detail-page--terminal' : ''}`}>
+    <div className={`detail-page server-detail-page ${tab === 'terminal' ? 'detail-page--terminal' : ''}`}>
       <div className="server-identity">
         <div className="server-identity__summary"><StatusPill status={server.status} /><span className="server-identity__meta">{server.location ? `${server.location} · ` : ''}{snapshot.username}@{snapshot.hostname} · 端口 {server.port}</span>{isShowingCachedSnapshot && <span className="server-cache-state" role="status" aria-live="polite" title={server.status === 'offline' ? server.lastError ?? undefined : undefined}>{isReconnecting ? <LoaderCircle className="spin" size={13} /> : <Clock3 size={13} />}<span>{isReconnecting ? '更新中，显示上次采样' : `显示 ${relativeTime(snapshot.timestamp)}的采样`}</span></span>}</div>
         <div className="server-identity__actions"><button className="icon-button" aria-label="打开采集与连接日志" title="日志" onClick={() => setShowLogs((value) => !value)}><ScrollText size={17} /></button><button className="icon-button" aria-label="刷新当前服务器" title="刷新当前服务器" onClick={onRefresh} disabled={isRefreshing}><RefreshCw size={17} className={isRefreshing ? 'spin' : ''} /></button><button className="icon-button" aria-label="编辑服务器" title="编辑服务器" onClick={onEdit}><MoreHorizontal size={18} /></button></div>
@@ -2584,7 +2638,7 @@ function IdleReservationCenter({ reservations, warnings, onClose, onEdit, onStat
   </div>
 }
 
-export function SettingsSheet({ settings, onboardingVisible, onClose, onSave }: { settings: AppSettings; onboardingVisible: boolean; onClose: () => void; onSave: (settings: AppSettings, showOnboarding: boolean) => Promise<void> }) {
+export function SettingsSheet({ settings, zoom = 1, onZoomChange = () => {}, onboardingVisible, onClose, onSave }: { settings: AppSettings; zoom?: number; onZoomChange?: (value: number) => void; onboardingVisible: boolean; onClose: () => void; onSave: (settings: AppSettings, showOnboarding: boolean) => Promise<void> }) {
   const [value, setValue] = useState(settings)
   const [showOnboarding, setShowOnboarding] = useState(onboardingVisible)
   const [saving, setSaving] = useState(false)
@@ -2600,7 +2654,8 @@ export function SettingsSheet({ settings, onboardingVisible, onClose, onSave }: 
         </SettingsGroup>
         <SettingsGroup icon={<SlidersHorizontal />} title="外观">
           <label>主题<select value={value.theme} onChange={(event) => set('theme', event.target.value as AppSettings['theme'])}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
-          <div className="settings-choice-row"><span><strong>字体大小</strong><small>大号在标准字号基础上增加 2px，不改变图表和固定控件尺寸</small></span><div className="segmented settings-mode" role="group" aria-label="字体大小"><button type="button" className={value.fontSize === 'standard' ? 'is-selected' : ''} aria-pressed={value.fontSize === 'standard'} onClick={() => set('fontSize', 'standard')}>标准</button><button type="button" className={value.fontSize === 'large' ? 'is-selected' : ''} aria-pressed={value.fontSize === 'large'} onClick={() => set('fontSize', 'large')}>大号</button></div></div>
+          <label className="settings-range-row"><span><strong>界面缩放</strong><small id="zoom-shortcuts" title="macOS 用 ⌘，Windows 用 Ctrl，配合 − 缩小、+ 放大、0 重置">macOS ⌘ / Windows Ctrl：− 缩小、+ 放大、0 重置</small></span><span>{Math.round(zoom * 100)}%</span><input type="range" aria-label="设置界面缩放" aria-describedby="zoom-shortcuts" aria-valuetext={`${Math.round(zoom * 100)}%`} min="50" max="200" step="5" value={Math.round(zoom * 100)} onChange={(event) => onZoomChange(Number(event.target.value) / 100)} /></label>
+          <label className="settings-choice-row"><span><strong>每行最多卡片数</strong><small id="card-column-help">默认 3 片，空间不足时自动减少</small></span><select aria-label="每行最多卡片数" aria-describedby="card-column-help" value={value.maxCardsPerRow ?? 3} onChange={(event) => set('maxCardsPerRow', Number(event.target.value))}>{[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} 片</option>)}</select></label>
           <div className="settings-choice-row"><span><strong>菜单栏状态</strong><small>扩展模式固定显示待处理预约和异常进程数量</small></span><div className="segmented settings-mode" role="group" aria-label="菜单栏状态模式"><button type="button" className={value.menuBarMode === 'compact' ? 'is-selected' : ''} aria-pressed={value.menuBarMode === 'compact'} onClick={() => set('menuBarMode', 'compact')}>紧凑</button><button type="button" className={value.menuBarMode === 'expanded' ? 'is-selected' : ''} aria-pressed={value.menuBarMode === 'expanded'} onClick={() => set('menuBarMode', 'expanded')}>扩展</button></div></div>
           <label className="switch-row"><span><strong>我的任务标记色</strong><small>用于显存光标、你的任务标签与侧栏提示</small></span><input type="color" value={value.currentUserAccent} onChange={(event) => set('currentUserAccent', event.target.value)} /></label>
           <label className="switch-row"><span><strong>减少非必要动效</strong><small>也会自动尊重系统“减少动态效果”设置</small></span><input type="checkbox" checked={value.reduceMotion} onChange={(event) => set('reduceMotion', event.target.checked)} /></label>

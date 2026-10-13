@@ -74,6 +74,7 @@ const defaultSettings: AppSettings = {
   currentUserAccent: '#0a84ff',
   theme: 'system',
   fontSize: 'standard',
+  maxCardsPerRow: 3,
   menuBarMode: 'compact',
   reduceMotion: false,
   showAddServerGuide: true,
