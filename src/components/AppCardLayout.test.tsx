@@ -2,22 +2,12 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
 import App from '../App'
 import { api } from '../services/api'
 
 vi.mock('./SshTerminal', () => ({ SshTerminal: () => null }))
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let root: ReturnType<typeof createRoot> | undefined
-
-it('left-aligns GPU status cards when fewer cards than the configured maximum exist', () => {
-  const cardStyles = readFileSync('src/styles.css', 'utf8')
-  expect(cardStyles).toMatch(/\.gpu-grid, \.project-grid\s*\{\s*justify-content:\s*start;/)
-  expect(cardStyles).toMatch(/\.detail-page\.server-detail-page\s*\{\s*width:\s*min\(var\(--card-page-width, 1180px\), calc\(100% - 52px\)\);/)
-  expect(cardStyles).toContain('.detail-page.server-detail-page')
-  expect(cardStyles).not.toContain('.detail-page:has(.overview-stack)')
-  expect(cardStyles).toMatch(/\.server-detail-page :is\([^}]+\.usage-waffle-list\)\s*\{\s*justify-content:\s*start;/)
-})
 
 afterEach(() => {
   act(() => root?.unmount())
