@@ -2,11 +2,22 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import App from '../App'
+import { api } from '../services/api'
 
 vi.mock('./SshTerminal', () => ({ SshTerminal: () => null }))
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let root: ReturnType<typeof createRoot> | undefined
+
+it('left-aligns GPU status cards when fewer cards than the configured maximum exist', () => {
+  const cardStyles = readFileSync('src/styles.css', 'utf8')
+  expect(cardStyles).toMatch(/\.gpu-grid, \.project-grid\s*\{\s*justify-content:\s*start;/)
+  expect(cardStyles).toMatch(/\.detail-page\.server-detail-page\s*\{\s*width:\s*min\(var\(--card-page-width, 1180px\), calc\(100% - 52px\)\);/)
+  expect(cardStyles).toContain('.detail-page.server-detail-page')
+  expect(cardStyles).not.toContain('.detail-page:has(.overview-stack)')
+  expect(cardStyles).toMatch(/\.server-detail-page :is\([^}]+\.usage-waffle-list\)\s*\{\s*justify-content:\s*start;/)
+})
 
 afterEach(() => {
   act(() => root?.unmount())
@@ -17,7 +28,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('fits the entire card page to one, two or three columns without changing the initial card width', async () => {
+it.each([[2, '1048px'], [3, '1578px'], [4, '2108px'], [5, '2638px']])('respects a maximum of %s cards without changing the base card width', async (maximum, cappedWidth) => {
+  const settings = await api.getSettings()
+  vi.spyOn(api, 'getSettings').mockResolvedValue({ ...settings, maxCardsPerRow: Number(maximum) })
   let width = 1100
   let resize: (() => void) | undefined
   const disconnect = vi.fn()
@@ -42,7 +55,7 @@ it('fits the entire card page to one, two or three columns without changing the 
   expect(style.getPropertyValue('--card-base-width')).toBe('518px')
   expect(style.getPropertyValue('--card-page-width')).toBe('1048px')
   expect(resize).toBeDefined()
-  for (const [available, expected] of [[1099, '518px'], [1100, '1048px'], [1630, '1578px'], [2400, '1578px'], [400, '518px']]) {
+  for (const [available, expected] of [[1099, '518px'], [1100, '1048px'], [3200, cappedWidth], [400, '518px']]) {
     width = Number(available)
     act(() => resize!())
     expect(style.getPropertyValue('--card-page-width')).toBe(expected)

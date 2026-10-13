@@ -350,6 +350,7 @@ function App() {
   const [zoomNotice, setZoomNotice] = useState<number | null>(null)
   const [uiZoom, setUiZoom] = useState(1)
   const zoomAdjustRef = useRef<(delta: number) => void>(() => {})
+  const cardLayoutRefreshRef = useRef<(maximum: number) => void>(() => {})
   const [remoteSyncStatus, setRemoteSyncStatus] = useState<RemoteSyncStatusState | null>(null)
   const [initialCollectionComplete, setInitialCollectionComplete] = useState(false)
   const [remoteSyncRetryRevision, setRemoteSyncRetryRevision] = useState(0)
@@ -993,15 +994,21 @@ function App() {
     const cardWidth = Math.max(1, (originalContentWidth - 12) / 2)
     root.style.setProperty('--card-base-width', `${cardWidth}px`)
     let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
+    let maxCardsPerRow = 3
     // Observe the available workspace, not the fitted page, to avoid a resize loop.
     const workspace = root.querySelector<HTMLElement>('.workspace')
     const fitCardPage = () => {
       if (!workspace) return
       const availableWidth = Math.max(0, workspace.clientWidth - 52)
-      const columns = Math.max(1, Math.min(3, Math.floor((availableWidth + 12) / (cardWidth + 12))))
+      const columns = Math.max(1, Math.min(maxCardsPerRow, Math.floor((availableWidth + 12) / (cardWidth + 12))))
       root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : columns * cardWidth + (columns - 1) * 12}px`)
     }
     const cardLayoutObserver = new ResizeObserver(fitCardPage)
+    cardLayoutRefreshRef.current = (maximum) => {
+      maxCardsPerRow = Number.isFinite(maximum) ? Math.max(2, Math.min(5, Math.round(maximum))) : 3
+      root.style.setProperty('--max-card-columns', String(maxCardsPerRow))
+      fitCardPage()
+    }
     if (workspace) cardLayoutObserver.observe(workspace)
     fitCardPage()
     const applyZoom = () => {
@@ -1023,8 +1030,12 @@ function App() {
       else if (event.key === '0') { event.preventDefault(); zoom = 1; applyZoom() }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-base-width'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {} }
+    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-base-width'); root.style.removeProperty('--max-card-columns'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {}; cardLayoutRefreshRef.current = () => {} }
   }, [])
+
+  useEffect(() => {
+    cardLayoutRefreshRef.current(settings?.maxCardsPerRow ?? 3)
+  }, [settings?.maxCardsPerRow])
 
   useEffect(() => {
     if (zoomNotice === null) return
@@ -1905,7 +1916,7 @@ function ServerDetail({ server, snapshot, points, settings, tab, selectedGpuUuid
     onTab(nextTab)
   }
   return (
-    <div className={`detail-page ${tab === 'terminal' ? 'detail-page--terminal' : ''}`}>
+    <div className={`detail-page server-detail-page ${tab === 'terminal' ? 'detail-page--terminal' : ''}`}>
       <div className="server-identity">
         <div className="server-identity__summary"><StatusPill status={server.status} /><span className="server-identity__meta">{server.location ? `${server.location} · ` : ''}{snapshot.username}@{snapshot.hostname} · 端口 {server.port}</span>{isShowingCachedSnapshot && <span className="server-cache-state" role="status" aria-live="polite" title={server.status === 'offline' ? server.lastError ?? undefined : undefined}>{isReconnecting ? <LoaderCircle className="spin" size={13} /> : <Clock3 size={13} />}<span>{isReconnecting ? '更新中，显示上次采样' : `显示 ${relativeTime(snapshot.timestamp)}的采样`}</span></span>}</div>
         <div className="server-identity__actions"><button className="icon-button" aria-label="打开采集与连接日志" title="日志" onClick={() => setShowLogs((value) => !value)}><ScrollText size={17} /></button><button className="icon-button" aria-label="刷新当前服务器" title="刷新当前服务器" onClick={onRefresh} disabled={isRefreshing}><RefreshCw size={17} className={isRefreshing ? 'spin' : ''} /></button><button className="icon-button" aria-label="编辑服务器" title="编辑服务器" onClick={onEdit}><MoreHorizontal size={18} /></button></div>
@@ -2627,10 +2638,6 @@ function IdleReservationCenter({ reservations, warnings, onClose, onEdit, onStat
   </div>
 }
 
-export function ZoomSelect({ value, onChange, label }: { value: number; onChange: (value: number) => void; label: string }) {
-  return <select className="zoom-select" aria-label={label} value={Math.round(value * 100)} onChange={(event) => onChange(Number(event.target.value) / 100)}>{Array.from({ length: 31 }, (_, index) => 50 + index * 5).map((percent) => <option key={percent} value={percent}>{percent}%</option>)}</select>
-}
-
 export function SettingsSheet({ settings, zoom = 1, onZoomChange = () => {}, onboardingVisible, onClose, onSave }: { settings: AppSettings; zoom?: number; onZoomChange?: (value: number) => void; onboardingVisible: boolean; onClose: () => void; onSave: (settings: AppSettings, showOnboarding: boolean) => Promise<void> }) {
   const [value, setValue] = useState(settings)
   const [showOnboarding, setShowOnboarding] = useState(onboardingVisible)
@@ -2647,7 +2654,8 @@ export function SettingsSheet({ settings, zoom = 1, onZoomChange = () => {}, onb
         </SettingsGroup>
         <SettingsGroup icon={<SlidersHorizontal />} title="外观">
           <label>主题<select value={value.theme} onChange={(event) => set('theme', event.target.value as AppSettings['theme'])}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
-          <div className="settings-choice-row"><span><strong>界面缩放</strong><small>整体调整文字与卡片大小，立即生效并自动保存</small></span><ZoomSelect value={zoom} onChange={onZoomChange} label="设置界面缩放" /></div>
+          <label className="settings-range-row"><span><strong>界面缩放</strong><small id="zoom-shortcuts" title="macOS 用 ⌘，Windows 用 Ctrl，配合 − 缩小、+ 放大、0 重置">macOS ⌘ / Windows Ctrl：− 缩小、+ 放大、0 重置</small></span><span>{Math.round(zoom * 100)}%</span><input type="range" aria-label="设置界面缩放" aria-describedby="zoom-shortcuts" aria-valuetext={`${Math.round(zoom * 100)}%`} min="50" max="200" step="5" value={Math.round(zoom * 100)} onChange={(event) => onZoomChange(Number(event.target.value) / 100)} /></label>
+          <label className="settings-choice-row"><span><strong>每行最多卡片数</strong><small id="card-column-help">默认 3 片，空间不足时自动减少</small></span><select aria-label="每行最多卡片数" aria-describedby="card-column-help" value={value.maxCardsPerRow ?? 3} onChange={(event) => set('maxCardsPerRow', Number(event.target.value))}>{[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} 片</option>)}</select></label>
           <div className="settings-choice-row"><span><strong>菜单栏状态</strong><small>扩展模式固定显示待处理预约和异常进程数量</small></span><div className="segmented settings-mode" role="group" aria-label="菜单栏状态模式"><button type="button" className={value.menuBarMode === 'compact' ? 'is-selected' : ''} aria-pressed={value.menuBarMode === 'compact'} onClick={() => set('menuBarMode', 'compact')}>紧凑</button><button type="button" className={value.menuBarMode === 'expanded' ? 'is-selected' : ''} aria-pressed={value.menuBarMode === 'expanded'} onClick={() => set('menuBarMode', 'expanded')}>扩展</button></div></div>
           <label className="switch-row"><span><strong>我的任务标记色</strong><small>用于显存光标、你的任务标签与侧栏提示</small></span><input type="color" value={value.currentUserAccent} onChange={(event) => set('currentUserAccent', event.target.value)} /></label>
           <label className="switch-row"><span><strong>减少非必要动效</strong><small>也会自动尊重系统“减少动态效果”设置</small></span><input type="checkbox" checked={value.reduceMotion} onChange={(event) => set('reduceMotion', event.target.checked)} /></label>

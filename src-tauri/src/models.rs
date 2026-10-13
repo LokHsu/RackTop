@@ -543,6 +543,8 @@ pub struct AppSettings {
     pub theme: String,
     #[serde(default = "default_font_size")]
     pub font_size: String,
+    #[serde(default = "default_max_cards_per_row")]
+    pub max_cards_per_row: u8,
     #[serde(default = "default_menu_bar_mode")]
     pub menu_bar_mode: String,
     pub reduce_motion: bool,
@@ -558,6 +560,9 @@ fn default_menu_bar_mode() -> String {
 }
 fn default_font_size() -> String {
     "standard".into()
+}
+fn default_max_cards_per_row() -> u8 {
+    3
 }
 
 impl Default for AppSettings {
@@ -577,6 +582,7 @@ impl Default for AppSettings {
             current_user_accent: "#0a84ff".into(),
             theme: "system".into(),
             font_size: default_font_size(),
+            max_cards_per_row: default_max_cards_per_row(),
             menu_bar_mode: default_menu_bar_mode(),
             reduce_motion: false,
             show_add_server_guide: true,
@@ -610,6 +616,19 @@ mod tests {
         value.as_object_mut().unwrap().remove("fontSize");
         let settings: AppSettings = serde_json::from_value(value).unwrap();
         assert_eq!(settings.font_size, "standard");
+    }
+
+    #[test]
+    fn card_column_preference_defaults_and_round_trips() {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        value.as_object_mut().unwrap().remove("maxCardsPerRow");
+        let mut settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(settings.max_cards_per_row, 3);
+        for columns in 2..=5 {
+            settings.max_cards_per_row = columns;
+            let restored: AppSettings = serde_json::from_value(serde_json::to_value(&settings).unwrap()).unwrap();
+            assert_eq!(restored.max_cards_per_row, columns);
+        }
     }
 
     #[test]

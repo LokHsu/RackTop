@@ -896,6 +896,9 @@ fn save_settings(
     if settings.realtime_window_minutes < 10 || settings.history_retention_days == 0 {
         return Err("实时趋势窗口至少 10 分钟，历史保存至少 1 天".into());
     }
+    if !(2..=5).contains(&settings.max_cards_per_row) {
+        return Err("每行最多卡片数必须为 2–5".into());
+    }
     database.save_settings(&settings)?;
     Ok(settings)
 }

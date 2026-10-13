@@ -793,6 +793,10 @@ tr.is-current-user:not(.is-selected) td { background: color-mix(in srgb, var(--o
 .form-grid { display: grid; gap: 12px; }.form-grid--2 { grid-template-columns: repeat(2, 1fr); align-items: start; }.form-grid--host { grid-template-columns: 2fr .7fr 1.2fr; }
 label { display: grid; gap: 6px; color: var(--text-secondary); font-size: calc(11px + var(--font-adjust, 0px)); font-weight: 550; }
 input, select { min-width: 0; height: 34px; padding: 6px 9px; border: 1px solid var(--border-strong); border-radius: 7px; outline: 0; color: var(--text); background: var(--surface-subtle); font-size: calc(12px + var(--font-adjust, 0px)); }
+select option, select optgroup { color: var(--text); background-color: var(--surface-solid); }
+@media (forced-colors: active) {
+  select option, select optgroup { color: CanvasText; background-color: Canvas; }
+}
 input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 13%, transparent); }
 .server-tag-input { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 34px; padding: 3px 5px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-subtle); cursor: text; }
 .server-tag-input:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 13%, transparent); }
@@ -818,9 +822,12 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
 .reservation-sheet .sheet__header, .reservation-center-sheet .sheet__header, .reservation-sheet .sheet__footer, .reservation-center-sheet .sheet__footer { background: var(--surface-solid); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .settings-sheet { width: min(760px, 100%); }
 .settings-choice-row { display: flex !important; align-items: center; justify-content: space-between; gap: 16px; }
-.settings-choice-row > span { display: grid; }
-.settings-choice-row strong, .switch-row strong { color: var(--text); font-size: calc(12px + var(--font-adjust, 0px)); font-weight: 600; line-height: 1.35; }
-.settings-choice-row small, .switch-row small { margin-top: 3px; color: var(--text-tertiary); font-size: calc(10px + var(--font-adjust, 0px)); font-weight: 400; line-height: 1.4; }
+.settings-choice-row > span, .settings-range-row > span:first-child { display: grid; }
+.settings-range-row > span:first-child { min-width: 0; }
+.settings-range-row > span:nth-child(2) { align-self: start; }
+.settings-range-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-choice-row strong, .settings-range-row strong, .switch-row strong { color: var(--text); font-size: calc(12px + var(--font-adjust, 0px)); font-weight: 600; line-height: 1.35; }
+.settings-choice-row small, .settings-range-row small, .switch-row small { margin-top: 3px; color: var(--text-tertiary); font-size: calc(10px + var(--font-adjust, 0px)); font-weight: 400; line-height: 1.4; }
 .settings-mode { flex: 0 0 150px; }
 .settings-mode button { min-height: 28px; font-size: calc(10px + var(--font-adjust, 0px)); font-weight: 500; }
 .settings-mode button.is-selected { font-weight: 650; }
@@ -1153,22 +1160,21 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
   .sort-controls { justify-content: flex-end; }
 }
 
-.settings-choice-row > .zoom-select { width: 150px; flex-shrink: 0; }
 .sheet { max-height: calc(100vh * var(--ui-zoom-inverse, 1) - 64px); }
 .about-sheet, .activity-log-sheet { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
 .about-body, .activity-log-body { min-height: 0; overflow-y: auto; }
 .about-sheet > .sheet__header, .about-sheet > .sheet__footer,
 .activity-log-sheet > .sheet__header, .activity-log-sheet > .sheet__footer { position: static; }
 
-/* Size cards from their actual layout width, including the app zoom, and cap
-   each row at three cards. Card internals retain their own column counts. */
+/* Size cards from their actual layout width and the configured column limit.
+   Card internals retain their own column counts. */
 .detail-page:not(.detail-page--terminal):has(.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid, .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid) {
   width: min(var(--card-page-width, 1180px), calc(100% - 52px));
 }
 .gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid,
 .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid {
   --card-min-width: var(--card-base-width, 584px);
-  max-width: calc(3 * var(--card-min-width) + 2 * var(--card-gap, 12px));
+  max-width: calc(var(--max-card-columns, 3) * var(--card-min-width) + (var(--max-card-columns, 3) - 1) * var(--card-gap, 12px));
   justify-content: center;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min-width)), var(--card-min-width)));
 }
@@ -1176,6 +1182,18 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
 .history-heatmap-list, .usage-waffle-list { --card-gap: 10px; }
 .fleet-grid { grid-auto-flow: row; }
 .fleet-grid > .masonry-item { grid-column: auto; }
+.gpu-grid, .project-grid { justify-content: start; }
+
+/* Keep server tabs at a shared width independent of their current contents. */
+.app-shell[data-zoom-layout="fixed"] .detail-page.server-detail-page {
+  width: min(var(--card-page-width, 1180px), calc(100% - 52px));
+}
+.app-shell[data-zoom-layout="enlarged"] .detail-page.server-detail-page {
+  width: min(1180px, calc(100% - 52px));
+}
+.server-detail-page :is(.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid, .history-heatmap-list, .usage-waffle-list) {
+  justify-content: start;
+}
 
 /* Above 100%, retain the stable release's flexible two-column layout. */
 .app-shell[data-zoom-layout="enlarged"] :is(.gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid, .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid) {
