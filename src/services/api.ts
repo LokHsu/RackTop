@@ -577,9 +577,12 @@ export const api = {
   },
   async notify(title: string, body: string, extra?: Record<string, unknown>): Promise<void> {
     if (!isTauri) return
+    // Gate every notification path, including cleanup and connection failures.
+    const enabled = () => api.getSettings().then((settings) => settings.idleNotificationsEnabled !== false).catch(() => false)
+    if (!await enabled()) return
     let granted = await isPermissionGranted()
     if (!granted) granted = (await requestPermission()) === 'granted'
-    if (granted) sendNotification({ title, body, extra, autoCancel: true })
+    if (granted && await enabled()) sendNotification({ title, body, extra, autoCancel: true })
   },
   async onNotificationAction(callback: (extra: Record<string, unknown>) => void): Promise<() => void> {
     if (!isTauri) return () => {}
