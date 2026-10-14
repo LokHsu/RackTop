@@ -1,6 +1,6 @@
 [package]
 name = "racktop"
-version = "1.25.6"
+version = "1.26.0"
 description = "Live GPU & CPU monitoring for every server"
 authors = ["RackTop"]
 edition = "2024"
@@ -48,6 +48,10 @@ tauri-plugin-process = "2"
 [target.'cfg(windows)'.dependencies]
 tauri-plugin-single-instance = "2"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+tauri-plugin-single-instance = "2"
 
 [dev-dependencies]
 tempfile = "3"
