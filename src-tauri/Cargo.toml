@@ -49,9 +49,5 @@ tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
-tauri-plugin-single-instance = "2"
-
 [dev-dependencies]
 tempfile = "3"

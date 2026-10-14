@@ -13,12 +13,6 @@ on:
         required: true
         type: boolean
         default: true
-      build_linux:
-        description: Build Ubuntu x64 DEB and AppImage packages
-        required: true
-        type: boolean
-        default: true
-  pull_request:
   push:
     tags:
       - "v*"
@@ -27,73 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  linux:
-    runs-on: ubuntu-22.04
-    if: github.event_name != 'workflow_dispatch' || inputs.build_linux
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libdbus-1-dev openssh-client xterm gnome-keyring xvfb
-      - run: npm ci
-      - name: Read package version
-        run: echo "RACKTOP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
-      - run: npm run test
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - name: Build Linux review packages
-        if: github.event_name == 'pull_request'
-        run: npm run bundle:linux -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
-      - name: Build signed Linux release packages
-        if: github.event_name != 'pull_request'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npm run bundle:linux
-      - name: Smoke-test packaged application
-        run: |
-          set -euo pipefail
-          DEB_PATH=$(find src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)
-          test -n "$DEB_PATH"
-          dpkg-deb --info "$DEB_PATH"
-          dpkg-deb --extract "$DEB_PATH" "$RUNNER_TEMP/racktop-deb"
-          APP_PATH="$RUNNER_TEMP/racktop-deb/usr/bin/racktop"
-          test -x "$APP_PATH"
-          APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' -type f -print -quit)
-          test -n "$APPIMAGE_PATH"
-          APPIMAGE_PATH=$(realpath "$APPIMAGE_PATH")
-          if [ "${{ github.event_name }}" != 'pull_request' ]; then
-            test -s "$APPIMAGE_PATH.sig"
-          fi
-          xvfb-run -a dbus-run-session -- bash scripts/smoke-linux.sh "$APP_PATH"
-          mkdir -p "$RUNNER_TEMP/racktop-appimage"
-          (cd "$RUNNER_TEMP/racktop-appimage" && "$APPIMAGE_PATH" --appimage-extract)
-          xvfb-run -a dbus-run-session -- bash scripts/smoke-linux.sh "$RUNNER_TEMP/racktop-appimage/squashfs-root/AppRun"
-      - name: Record package checksums
-        run: sha256sum src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/appimage/*.AppImage > src-tauri/target/release/bundle/SHA256SUMS
-      - uses: actions/upload-artifact@v4
-        with:
-          name: RackTop_${{ env.RACKTOP_VERSION }}_linux-x64-deb
-          if-no-files-found: error
-          path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/SHA256SUMS
-      - uses: actions/upload-artifact@v4
-        with:
-          name: RackTop_${{ env.RACKTOP_VERSION }}_linux-x64-appimage
-          if-no-files-found: error
-          path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/appimage/*.sig
-            src-tauri/target/release/bundle/SHA256SUMS
-
   macos:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_macos)
+    if: github.event_name != 'workflow_dispatch' || inputs.build_macos
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +124,7 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
 
   windows:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_windows)
+    if: github.event_name != 'workflow_dispatch' || inputs.build_windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

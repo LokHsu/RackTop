@@ -14,16 +14,6 @@
 
 本版本修复昇腾 NPU 状态解析、GB10 统一内存显示、SSH 子进程残留和通知开关保存问题，并优化终端会话保留与应用内更新进度反馈。现有服务器配置和历史数据保持兼容；1.25.6 已发布为稳定版。
 
-### Linux / Ubuntu 适配补充（本地待审核）
-
-- 按本次要求保持版本 1.25.6，不新增版本条目；既有稳定发布记录保留，Linux 产物尚未发布。
-- Linux 复用 Windows 自定义窗口按钮、拖动和双击最大化，关闭系统标题栏。
-- Linux 浮动窗口按 Ubuntu Yaru 主题使用 12px 圆角，最大化与全屏恢复直角；Windows 原有按钮触发方式和 macOS 窗口配置保持不变。
-- 增加 Secret Service 密钥环、单实例启动、Linux 平台识别及 WebKitGTK 黑屏修复。
-- 增加 Ubuntu DEB / AppImage 构建，Actions 标签构建涵盖 macOS、Windows、Linux，Linux 正式包使用 updater 签名。
-- 最小补齐三平台发布规则、六个发布附件及 Linux 更新清单；详见 AGENTS.md。
-- 本机结果及未验证范围见 docs/LINUX_REVIEW.md，构建验证方式见 docs/LINUX.md。
-
 ### 本版本修改
 
 - 修复 Windows 重复打开应用时启动多个进程与窗口的问题：在其他插件和数据库、采集初始化之前注册 Tauri 官方单实例插件；再次启动退出重复进程，并显示、取消最小化和聚焦原主窗口。仅在 Windows 启用，macOS 现有启动行为不变。
