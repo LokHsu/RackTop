@@ -185,13 +185,16 @@ async function toggleWindowMaximize(event: MouseEvent<HTMLElement>) {
   await getCurrentWindow().toggleMaximize()
 }
 
-function WindowsWindowControls() {
-  if (appPlatform !== 'windows') return null
+export function DesktopWindowControls({ platform = appPlatform }: { platform?: ReturnType<typeof detectAppPlatform> }) {
+  if (platform !== 'windows' && platform !== 'linux') return null
+  const windowAction = (command: string) => platform === 'windows'
+    ? { onMouseDown: (event: MouseEvent<HTMLButtonElement>) => { event.preventDefault(); event.stopPropagation(); void invoke(command) } }
+    : { onClick: () => void invoke(command) }
   return (
     <div className="window-controls" aria-label="窗口控制" onMouseDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-      <button type="button" onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); void invoke('window_minimize') }} aria-label="最小化窗口"><Minus size={15} /></button>
-      <button type="button" onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); void invoke('window_toggle_maximize') }} aria-label="最大化或还原窗口"><Square size={12} /></button>
-      <button type="button" className="window-controls__close" onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); void invoke('window_close') }} aria-label="关闭窗口"><X size={15} /></button>
+      <button type="button" {...windowAction('window_minimize')} aria-label="最小化窗口" title={platform === 'linux' ? '最小化窗口' : undefined}><Minus size={15} /></button>
+      <button type="button" {...windowAction('window_toggle_maximize')} aria-label="最大化或还原窗口" title={platform === 'linux' ? '最大化或还原窗口' : undefined}><Square size={12} /></button>
+      <button type="button" className="window-controls__close" {...windowAction('window_close')} aria-label="关闭窗口" title={platform === 'linux' ? '关闭窗口' : undefined}><X size={15} /></button>
     </div>
   )
 }
@@ -1778,7 +1781,7 @@ function App() {
             <span className={`refresh-label ${paused ? 'is-paused' : ''}`}><Clock3 size={14} />{paused ? '采集已暂停' : mainView === 'server' && selectedServer ? relativeTime(selectedServer.lastSeenAt) : totals.latestRefresh ? relativeTime(totals.latestRefresh) : `${settings?.defaultSamplingIntervalSeconds ?? 2} 秒采样`}</span>
             <button className="button button--secondary" onClick={() => void runManualRefreshAll()} disabled={manualRefreshingAll}><RefreshCw size={16} className={manualRefreshingAll ? 'spin' : ''} />刷新全部</button>
             <button className="icon-button" aria-label="预约与通知" onClick={() => setShowReservationCenter(true)}><Bell size={18} />{(totals.hot > 0 || activeIdleReservationCount > 0 || gpuMemoryStallWarnings.length > 0 || mineProcessWarnings.length > 0) && <span className="notification-dot" />}</button>
-            <WindowsWindowControls />
+            <DesktopWindowControls />
           </div>
         </header>
 

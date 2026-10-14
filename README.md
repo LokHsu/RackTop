@@ -22,7 +22,7 @@ RackTop 是面向个人研究者和小型团队的 GPU 服务器桌面工作台�
 <p align="center">
   <a href="https://github.com/Tongzh-SEU/RackTop/releases/latest"><img src="https://img.shields.io/github/v/release/Tongzh-SEU/RackTop?style=flat-square&logo=github&label=release" alt="Release"></a>
   <a href="https://github.com/Tongzh-SEU/RackTop/stargazers"><img src="https://img.shields.io/github/stars/Tongzh-SEU/RackTop?style=flat-square&logo=github&label=stars" alt="GitHub Stars"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-1687b8?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-1687b8?style=flat-square" alt="Platform">
   <a href="https://github.com/Tongzh-SEU/RackTop/releases"><img src="https://img.shields.io/github/downloads/Tongzh-SEU/RackTop/total?style=flat-square&logo=github&label=downloads" alt="Downloads"></a>
   <a href="https://github.com/Tongzh-SEU/RackTop/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green?style=flat-square" alt="GPL-3.0 License"></a>
 </p>
@@ -46,6 +46,10 @@ RackTop 是面向个人研究者和小型团队的 GPU 服务器桌面工作台�
 | Windows x64 | `RackTop_1.25.6_x64-setup.exe` | [下载 Windows 版本](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.25.6/RackTop_1.25.6_x64-setup.exe) |
 
 更多版本见 [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases)。
+
+源码已增加 Linux（Ubuntu x64）审核版本，支持构建 DEB 和 AppImage。
+安装及验证方法见 [Linux 适配指南](docs/LINUX.md)，Linux 安装包尚未发布为稳定版。
+
 macOS版本若首次打开时提示应用来源受限，请前往“系统设置 → 隐私与安全性”，确认允许打开该应用。
 Windows版本若提示“智能应用控制已阻止可能不安全的应用”，请在“设置”中搜索“智能应用控制”，并将其关闭。
 

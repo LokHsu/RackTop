@@ -22,7 +22,7 @@ Find the right GPU before launching a job, monitor resources and processes while
 <p align="center">
   <a href="https://github.com/Tongzh-SEU/RackTop/releases/latest"><img src="https://img.shields.io/github/v/release/Tongzh-SEU/RackTop?style=flat-square&logo=github&label=release" alt="Release"></a>
   <a href="https://github.com/Tongzh-SEU/RackTop/stargazers"><img src="https://img.shields.io/github/stars/Tongzh-SEU/RackTop?style=flat-square&logo=github&label=stars" alt="GitHub Stars"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-1687b8?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-1687b8?style=flat-square" alt="Platform">
   <a href="https://github.com/Tongzh-SEU/RackTop/releases"><img src="https://img.shields.io/github/downloads/Tongzh-SEU/RackTop/total?style=flat-square&logo=github&label=downloads" alt="Downloads"></a>
   <a href="https://github.com/Tongzh-SEU/RackTop/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green?style=flat-square" alt="GPL-3.0 License"></a>
 </p>
@@ -43,6 +43,10 @@ Current stable release: **v1.25.6**
 | Windows x64 | `RackTop_1.25.6_x64-setup.exe` | [Download for Windows](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.25.6/RackTop_1.25.6_x64-setup.exe) |
 
 See [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases) for additional versions.
+
+Linux (Ubuntu x64) support is available in the source for review. See the
+[Linux build and validation guide](docs/LINUX.md) for DEB/AppImage builds;
+Linux installers have not yet been published as a stable release.
 
 If macOS blocks the app the first time you open it, go to **System Settings → Privacy & Security** and allow the app to open.
 
