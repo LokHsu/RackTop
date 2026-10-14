@@ -111,6 +111,9 @@ const browserPreviewState = api.isDesktop || typeof window === 'undefined' ? nul
 const releaseUrl = (version: string) => `https://github.com/Tongzh-SEU/RackTop/releases/tag/v${version.replace(/^v/i, '')}`
 
 const ONBOARDING_DISMISSED_KEY = 'racktop.onboardingDismissed.v1'
+// Horizontal space the card page leaves inside its scrolling container, matching
+// `.detail-page { width: min(..., calc(100% - 52px)) }` in styles.css.
+const CARD_PAGE_HORIZONTAL_INSET = 52
 
 const tabs: Array<{ value: DetailTab; label: string }> = [
   { value: 'overview', label: '概览' },
@@ -1009,17 +1012,20 @@ function App() {
     // Freeze the original two-column width at the initial, unscaled window size.
     // At or below 100%, resizing changes the column count, not the base width.
     // Above 100%, CSS uses the stable release's flexible card widths instead.
-    const sidebarWidth = Math.min(248, Math.max(220, window.innerWidth * 0.16))
-    const originalContentWidth = Math.min(1180, window.innerWidth - sidebarWidth - 52)
-    const cardWidth = Math.max(1, (originalContentWidth - 12) / 2)
+    //
+    // The card page is `calc(100% - 52px)` of the scrolling container, and that container
+    // owns the scrollbar, so the width CSS actually hands the page is its client box —
+    // read here, before the saved zoom is applied. Measuring the workspace instead
+    // overcounted by that scrollbar and left the row a few pixels short of two cards.
+    const cardScroller = root.querySelector<HTMLElement>('.workspace__scroll')
+    const cardPageWidth = cardScroller ? Math.max(0, cardScroller.clientWidth - CARD_PAGE_HORIZONTAL_INSET) : 0
+    const cardWidth = Math.max(1, (Math.min(1180, cardPageWidth) - 12) / 2)
     root.style.setProperty('--card-base-width', `${cardWidth}px`)
     let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
     let maxCardsPerRow = 3
-    // Observe the available workspace, not the fitted page, to avoid a resize loop.
-    const workspace = root.querySelector<HTMLElement>('.workspace')
     const fitCardPage = () => {
-      if (!workspace) return
-      const availableWidth = Math.max(0, workspace.clientWidth - 52)
+      if (!cardScroller) return
+      const availableWidth = Math.max(0, cardScroller.clientWidth - CARD_PAGE_HORIZONTAL_INSET)
       const columns = Math.max(1, Math.min(maxCardsPerRow, Math.floor((availableWidth + 12) / (cardWidth + 12))))
       root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : columns * cardWidth + (columns - 1) * 12}px`)
     }
@@ -1029,7 +1035,7 @@ function App() {
       root.style.setProperty('--max-card-columns', String(maxCardsPerRow))
       fitCardPage()
     }
-    if (workspace) cardLayoutObserver.observe(workspace)
+    if (cardScroller) cardLayoutObserver.observe(cardScroller)
     fitCardPage()
     const applyZoom = () => {
       // Keep layout geometry stable while scaling the application surface. CSS zoom
