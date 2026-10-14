@@ -67,7 +67,8 @@ import type { AppSettings, DetailTab, GpuMemoryStallWarning, HistoryHeatmapPoint
 import { isRackTopManagedIdentity } from './utils/sshSetup'
 import { DeleteServerDialog } from './components/DeleteServerDialog'
 import { AppUpdateDialog, AppUpdateProgressButton, AppUpdateTriggerButton } from './components/AppUpdateDialog'
-import { HistoryHeatmaps, StorageWaffleList } from './components/HistoryHeatmap'
+import { HistoryHeatmaps } from './components/HistoryHeatmap'
+import { StorageSection } from './components/StorageSection'
 import { MetricBar } from './components/MetricBar'
 import { ManagedProcessView, type ManagedLaunchIntent } from './components/ManagedProcessView'
 import { OnboardingChecklist, type OnboardingStep } from './components/OnboardingChecklist'
@@ -526,18 +527,8 @@ function App() {
       }
       setSnapshots((current) => ({ ...current, [serverId]: snapshot }))
       if (includeDisks && snapshot.disks?.length && !diskUsageInFlight.current.has(serverId)) {
-        const diskAttempt = lastDiskAttemptAt.current[serverId]
         diskUsageInFlight.current.add(serverId)
-        void api.collectDiskUsage(serverId, snapshot.disks.map((disk) => disk.mountPoint)).then((usage) => {
-          if (deletedServerIds.current.has(serverId) || lastDiskAttemptAt.current[serverId] !== diskAttempt) return
-          const latest = snapshotsRef.current[serverId]
-          if (!latest) return
-          const updated = { ...latest, disks: latest.disks?.map((disk) => ({
-            ...disk, currentUserUsedBytes: usage[disk.mountPoint] == null ? null : Math.min(disk.usedBytes, usage[disk.mountPoint]),
-          })) }
-          snapshotsRef.current = { ...snapshotsRef.current, [serverId]: updated }
-          setSnapshots((current) => ({ ...current, [serverId]: updated }))
-        }).catch(() => {
+        void api.collectDiskUsage(serverId, snapshot.disks.map((disk) => disk.mountPoint)).catch(() => {
           // Optional disk ownership must not change connection status or retry cadence.
         }).finally(() => diskUsageInFlight.current.delete(serverId))
       }
@@ -2258,7 +2249,7 @@ export function HistoryView({ server, snapshot }: { server: Server; snapshot: Sn
   return <div className="history-page">
     <section className="history-section"><header className="history-page__header"><div><History size={18} /><span><h2>资源热力图</h2><p>每列 1 天，每格汇总连续 3 小时的平均使用率</p></span></div><small>最近 {Math.min(90, Math.max(1, server.historyRetentionDays))} 天</small></header>{heatmapError ? <div className="history-page__state history-page__state--error"><AlertCircle size={16} />资源历史读取失败：{heatmapError}</div> : heatmapPoints.length === 0 ? <div className="history-page__state" role="status"><LoaderCircle className="spin" size={16} />正在读取资源趋势…</div> : <HistoryHeatmaps snapshot={snapshot} points={heatmapPoints} retentionDays={server.historyRetentionDays} />}</section>
     <section className="history-section"><header className="history-page__header"><div><History size={18} /><span><h2>{accelerator} 使用分布</h2><p>按 Unix 用户聚合活跃时间与显存积分</p></span></div><div className="usage-range" aria-label="使用分布时间范围">{([7, 15, 30, 90] as const).map((days) => <button key={days} aria-pressed={usageDays === days} onClick={() => setUsageDays(days)}>{days === 7 ? '1 周' : days === 15 ? '半个月' : days === 30 ? '1 个月' : '3 个月'}</button>)}</div></header>{usageError ? <div className="history-page__state history-page__state--error"><AlertCircle size={16} />使用分布读取失败：{usageError}</div> : usage === null ? <div className="history-page__state" role="status"><LoaderCircle className="spin" size={16} />正在统计使用分布…</div> : <UsageDistribution snapshot={snapshot} data={displayedUsage} />}</section>
-    <section className="history-section"><header className="history-page__header"><div><HardDrive size={18} /><span><h2>存储空间</h2><p>服务器磁盘占用情况，区分当前用户、其他用户与空闲空间</p></span></div></header><StorageWaffleList disks={snapshot.disks ?? []} /></section>
+    <StorageSection key={server.id} serverId={server.id} disks={snapshot.disks ?? []} />
     <section className="data-retention"><Database size={18} /><div><strong>{server.remoteHistoryEnabled ? '在线本地采样 · 离线远端补档' : '仅在线本地采样'}</strong><p>{server.remoteHistoryEnabled ? 'RackTop 在线时写入本机时间桶；远端隐藏进程仅在 App 离线后接管，重新打开时增量补齐缺口。' : 'RackTop 运行时在本机生成使用分布；App 离线期间不补零，缺失时段保持灰色。'}不会保存 PID、进程命令、路径或终端输入输出。</p></div></section>
   </div>
 }

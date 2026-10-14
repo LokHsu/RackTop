@@ -110,6 +110,7 @@ export function StorageWaffleList({ disks }: { disks: DiskMetric[] }) {
                 <div className="storage-waffle-row__footer">
                   <span><i className="is-own" />你的 <strong>{ownershipKnown ? formatStorage(ownBytes) : '—'}</strong></span>
                   <span><i className="is-other" />其他 <strong>{ownershipKnown ? formatStorage(otherBytes) : '—'}</strong></span>
+                  <span>剩余 <strong>{formatStorage(disk.availableBytes)}</strong></span>
                   <span>总计 <strong>{formatStorage(disk.totalBytes)}</strong> · {usedPercent.toFixed(1)}%</span>
                 </div>
               </div>

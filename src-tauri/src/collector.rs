@@ -204,57 +204,72 @@ fn shell_quote(value: &str) -> String {
 }
 
 // Runs on a separate SSH request: slow directory traversal never gates a snapshot.
-const DISK_USAGE_SCRIPT: &str = r#"
-export LANG=C LC_ALL=C
-current_user="$(id -un)"
-home_mount="$(df -P -k "$HOME" 2>/dev/null | awk 'NR == 2 {print $6}')"
-index=0
-for mount do
-  candidate=''
-  if [ "$mount" = "$home_mount" ]; then candidate="$HOME"
-  else
-    for path in "$mount/$current_user" "$mount/home/$current_user"; do
-      if [ -d "$path" ]; then candidate="$path"; break; fi
-    done
-  fi
-  if [ -n "$candidate" ]; then
-    if result="$(du -skx "$candidate" 2>/dev/null)"; then
-      size="$(printf '%s\n' "$result" | awk 'NR == 1 {print $1}')"
-      case "$size" in ''|*[!0-9]*) ;; *) printf '%s|%s\n' "$index" "$size" ;; esac
-    fi
-  fi
-  index=$((index + 1))
-done
-"#;
+const DISK_USAGE_SCRIPT: &str = include_str!("../assets/disk-usage.sh");
 
-pub async fn collect_disk_usage(server: &Server, password: Option<&str>, mounts: &[String]) -> Result<std::collections::HashMap<String, u64>, String> {
-    if mounts.len() > 16 || mounts.iter().any(|mount| !mount.starts_with('/') || mount.contains(['\n', '\r', '\0'])) {
-        return Err("磁盘挂载路径无效".into());
-    }
-    let (mut command, target) = configured_ssh_command(server, password)?;
-    // The lock is inherited by du: even an uninterruptible NFS read cannot spawn
-    // another traversal on the next refresh. No stale mkdir lock to remove.
+pub async fn scan_disk_usage<F>(server: &Server, password: Option<&str>, mounts: &[String], mut update: F) -> Result<(), crate::disk_scan::MountScanStatus>
+where F: FnMut(crate::disk_scan::MountScan) -> Result<(), String> {
+    use crate::disk_scan::{MountScanStatus, ROUND_SECONDS};
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+    let (mut command, target) = configured_ssh_command(server, password).map_err(|_| MountScanStatus::ConnectionFailed)?;
+    // flock remains inherited by du if an uninterruptible filesystem read survives timeout.
     let script = format!(
-        "mkdir -p \"$HOME/.racktop\" && flock -n \"$HOME/.racktop/.disk-usage.lock\" timeout -k 1 20 sh -c {} racktop-du {}",
+        "mkdir -p \"$HOME/.racktop\" && script=$(mktemp) && trap 'rm -f \"$script\"' EXIT HUP INT TERM && printf %s {} > \"$script\" && flock -E 75 -n \"$HOME/.racktop/.disk-usage.lock\" timeout -k 1 3600 sh \"$script\" {}",
         shell_quote(DISK_USAGE_SCRIPT), mounts.iter().map(|mount| shell_quote(mount)).collect::<Vec<_>>().join(" "),
     );
     command.arg(target).arg(script).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = timeout(Duration::from_secs(30), command.output()).await
-        .map_err(|_| "用户目录统计超时，基础监控不受影响".to_string())?
-        .map_err(|error| format!("无法启动目录统计：{error}"))?;
-    let values = parse_disk_usage(&String::from_utf8_lossy(&output.stdout), mounts);
-    if values.is_empty() && !output.status.success() {
-        return Err("用户目录统计未完成，基础监控不受影响".into());
-    }
-    Ok(values)
+    let mut child = command.spawn().map_err(|_| MountScanStatus::ConnectionFailed)?;
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut stderr = child.stderr.take().unwrap();
+    // Drain stderr concurrently without retaining unbounded remote output.
+    let work = async {
+        let read = async {
+            while let Some(line) = lines.next_line().await.map_err(|_| MountScanStatus::ConnectionFailed)? {
+                if let Some(value) = parse_disk_scan(&line, mounts) { update(value).map_err(|_| MountScanStatus::Failed)?; }
+            }
+            Ok::<_, MountScanStatus>(())
+        };
+        let drain = async {
+            let mut buffer = [0; 4096];
+            while stderr.read(&mut buffer).await.map_err(|_| MountScanStatus::ConnectionFailed)? != 0 {}
+            Ok::<_, MountScanStatus>(())
+        };
+        tokio::try_join!(read, drain)?;
+        let status = child.wait().await.map_err(|_| MountScanStatus::ConnectionFailed)?;
+        match status.code() {
+            Some(0) => Ok(()),
+            Some(75) => Err(MountScanStatus::Busy),
+            Some(124 | 137) => Err(MountScanStatus::Timeout),
+            Some(255) => Err(MountScanStatus::ConnectionFailed),
+            _ => Err(MountScanStatus::Failed),
+        }
+    };
+    timeout(Duration::from_secs(ROUND_SECONDS), work).await.unwrap_or(Err(MountScanStatus::Timeout))
 }
 
-fn parse_disk_usage(output: &str, mounts: &[String]) -> std::collections::HashMap<String, u64> {
-    output.lines().filter_map(|line| {
-        let (index, kb) = line.split_once('|')?;
-        let mount = mounts.get(index.parse::<usize>().ok()?)?;
-        Some((mount.clone(), kb.parse::<u64>().ok()?.saturating_mul(1024)))
-    }).collect()
+fn parse_disk_scan(line: &str, mounts: &[String]) -> Option<crate::disk_scan::MountScan> {
+    use crate::disk_scan::{MountScan, MountScanStatus};
+    let fields: Vec<_> = line.split('|').collect();
+    let mount_point = mounts.get(fields.first()?.parse::<usize>().ok()?)?.clone();
+    let status = match *fields.get(1)? {
+        "scanning" => MountScanStatus::Scanning, "success" => MountScanStatus::Success,
+        "timeout" => MountScanStatus::Timeout, "permissionDenied" => MountScanStatus::PermissionDenied,
+        "unrecognized" => MountScanStatus::Unrecognized, "failed" => MountScanStatus::Failed,
+        "duplicate" => MountScanStatus::Duplicate,
+        _ => return None,
+    };
+    let mut result = None;
+    let mut collected_at = None;
+    if status == MountScanStatus::Success {
+        let bytes = |index: usize| fields.get(index)?.parse::<u64>().ok()?.checked_mul(1024);
+        let used_bytes = bytes(2)?;
+        let total_bytes = bytes(3)?;
+        let available_bytes = bytes(4)?;
+        let user_bytes = bytes(5)?;
+        if used_bytes > total_bytes || available_bytes > total_bytes { return None; }
+        collected_at = Some(fields.get(6)?.parse::<i64>().ok()?);
+        result = Some(DiskMetric { mount_point: mount_point.clone(), used_bytes, total_bytes, available_bytes, current_user_used_bytes: Some(user_bytes.min(used_bytes)) });
+    }
+    Some(MountScan { mount_point, status, result, collected_at })
 }
 
 pub(crate) fn explicit_identity_file(server: &Server) -> Option<&str> {
@@ -1031,10 +1046,11 @@ mod tests {
     #[test]
     fn disk_usage_accepts_partial_results_without_inventing_zeroes() {
         let mounts = vec!["/data".to_string(), "/nfs".to_string()];
-        let result = parse_disk_usage("0|42\n1|invalid\n9|100\n", &mounts);
-        assert_eq!(result.get("/data"), Some(&(42 * 1024)));
-        assert!(!result.contains_key("/nfs"));
-        assert_eq!(parse_disk_usage("0|0\n", &mounts).get("/data"), Some(&0));
+        let result = parse_disk_scan("0|success|42|100|50|0|123", &mounts).unwrap();
+        assert_eq!(result.result.unwrap().current_user_used_bytes, Some(0));
+        assert!(parse_disk_scan("1|success|invalid", &mounts).is_none());
+        assert!(parse_disk_scan("9|timeout", &mounts).is_none());
+        assert!(parse_disk_scan("1|permissionDenied", &mounts).unwrap().result.is_none());
     }
 
     #[test]
