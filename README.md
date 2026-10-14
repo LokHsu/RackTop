@@ -47,8 +47,7 @@ RackTop 是面向个人研究者和小型团队的 GPU 服务器桌面工作台�
 
 更多版本见 [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases)。
 
-源码已增加 Linux（Ubuntu x64）审核版本，支持构建 DEB 和 AppImage。
-安装及验证方法见 [Linux 适配指南](docs/LINUX.md)，Linux 安装包尚未发布为稳定版。
+1.26.0 源码已增加 Linux（Ubuntu x64）桌面支持，可构建 DEB 和 AppImage；本次仅合并源码，Linux 安装包尚未发布为稳定版。
 
 macOS版本若首次打开时提示应用来源受限，请前往“系统设置 → 隐私与安全性”，确认允许打开该应用。
 Windows版本若提示“智能应用控制已阻止可能不安全的应用”，请在“设置”中搜索“智能应用控制”，并将其关闭。

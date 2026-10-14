@@ -44,9 +44,8 @@ Current stable release: **v1.25.6**
 
 See [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases) for additional versions.
 
-Linux (Ubuntu x64) support is available in the source for review. See the
-[Linux build and validation guide](docs/LINUX.md) for DEB/AppImage builds;
-Linux installers have not yet been published as a stable release.
+The 1.26.0 source adds Linux (Ubuntu x64) desktop support with DEB and AppImage builds.
+This is a source-only update; Linux installers have not yet been published as a stable release.
 
 If macOS blocks the app the first time you open it, go to **System Settings → Privacy & Security** and allow the app to open.
 
