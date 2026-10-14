@@ -390,6 +390,10 @@ export const api = {
     browserInteractionSummary.servers = browserInteractionSummary.servers.map((item) => item.serverId === serverId ? { ...item, lastFinishedAt: Date.now(), responseBytes: item.responseBytes + responseBytes, storedBytes: item.storedBytes + storedBytes, status: 'success' } : item)
     return snapshot
   },
+  async collectDiskUsage(serverId: string, mounts: string[]): Promise<Record<string, number>> {
+    if (isTauri) return invoke('collect_disk_usage', { serverId, mounts })
+    return Object.fromEntries((browserSnapshotFor(serverId).disks ?? []).filter((disk) => mounts.includes(disk.mountPoint) && disk.currentUserUsedBytes != null).map((disk) => [disk.mountPoint, disk.currentUserUsedBytes!]))
+  },
   async getInteractionLogSummary(): Promise<InteractionLogSummary> {
     return isTauri ? invoke('get_interaction_log_summary') : { ...browserInteractionSummary, servers: browserInteractionSummary.servers.map((item) => ({ ...item })) }
   },
@@ -573,9 +577,12 @@ export const api = {
   },
   async notify(title: string, body: string, extra?: Record<string, unknown>): Promise<void> {
     if (!isTauri) return
+    // Gate every notification path, including cleanup and connection failures.
+    const enabled = () => api.getSettings().then((settings) => settings.idleNotificationsEnabled !== false).catch(() => false)
+    if (!await enabled()) return
     let granted = await isPermissionGranted()
     if (!granted) granted = (await requestPermission()) === 'granted'
-    if (granted) sendNotification({ title, body, extra, autoCancel: true })
+    if (granted && await enabled()) sendNotification({ title, body, extra, autoCancel: true })
   },
   async onNotificationAction(callback: (extra: Record<string, unknown>) => void): Promise<() => void> {
     if (!isTauri) return () => {}

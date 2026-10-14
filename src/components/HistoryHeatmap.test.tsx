@@ -17,6 +17,20 @@ const snapshot: Snapshot = {
 const points: HistoryHeatmapPoint[] = [{ timestamp, sampleCount: 12, cpuUtilization: 25, memoryUtilization: 40, gpuUtilizations: { 'GPU-0': 55, 'GPU-1': 10 }, gpuMemoryUtilizations: { 'GPU-0': 70, 'GPU-1': 20 } }]
 
 describe('HistoryHeatmaps', () => {
+  it('shows unknown ownership as blank while retaining df totals', () => {
+    const markup = renderToStaticMarkup(<StorageWaffleList disks={[{ ...snapshot.disks![0], currentUserUsedBytes: null }]} />)
+    expect(markup).toContain('你的 <strong>—</strong>')
+    expect(markup).toContain('其他 <strong>—</strong>')
+    expect(markup).toContain('总计 <strong>10.0 GB</strong>')
+    expect(markup).toContain('已用 4.0 GB，用户占用暂无数据')
+    expect(markup).toContain('class="is-used"')
+  })
+  it('distinguishes a measured zero from unknown ownership', () => {
+    const markup = renderToStaticMarkup(<StorageWaffleList disks={[{ ...snapshot.disks![0], currentUserUsedBytes: 0 }]} />)
+    expect(markup).toContain('你的 <strong>0.0 GB</strong>')
+    expect(markup).not.toContain('用户占用暂无数据')
+    expect(markup).not.toContain('class="is-used"')
+  })
   it('renders one CPU block and one block per GPU', () => {
     const markup = renderToStaticMarkup(<HistoryHeatmaps snapshot={snapshot} points={points} retentionDays={2} />)
     expect(markup.match(/<section class="panel history-heatmap/g)).toHaveLength(3)

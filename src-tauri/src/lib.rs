@@ -595,6 +595,13 @@ fn list_latest_snapshots(database: State<'_, Database>) -> Result<Vec<Snapshot>,
 }
 
 #[tauri::command]
+async fn collect_disk_usage(database: State<'_, Database>, server_id: String, mounts: Vec<String>) -> Result<HashMap<String, u64>, String> {
+    let server = database.get_server(&server_id)?;
+    let password = if server.auth_method == "password" { database.get_password(&server_id, false)? } else { None };
+    collector::collect_disk_usage(&server, password.as_deref(), &mounts).await
+}
+
+#[tauri::command]
 fn storage_maintenance_active(database: State<'_, Database>) -> bool { database.is_maintenance() }
 
 #[tauri::command]
@@ -1432,6 +1439,7 @@ pub fn run() {
             open_setup_terminal,
             verify_ssh_setup,
             collect_server,
+            collect_disk_usage,
             list_latest_snapshots,
             get_interaction_log_summary,
             get_history,
