@@ -177,6 +177,20 @@ jobs:
           $appProcess = Start-Process $app.FullName -PassThru
           Start-Sleep -Seconds 5
           if ($appProcess.HasExited) { throw "Installed RackTop exited early with code $($appProcess.ExitCode)." }
+          for ($attempt = 0; $attempt -lt 2; $attempt++) {
+            $duplicate = Start-Process $app.FullName -PassThru
+            if (-not $duplicate.WaitForExit(10000)) {
+              Stop-Process -Id $duplicate.Id -Force
+              throw 'Duplicate RackTop launch did not exit within 10 seconds.'
+            }
+            if ($duplicate.ExitCode -ne 0) { throw "Duplicate launch failed with exit code $($duplicate.ExitCode)." }
+            $appProcess.Refresh()
+            if ($appProcess.HasExited) { throw 'Original RackTop exited during duplicate launch.' }
+            $instances = @(Get-Process | Where-Object { $_.Path -eq $app.FullName })
+            if ($instances.Count -ne 1 -or $instances[0].Id -ne $appProcess.Id) {
+              throw 'Repeated launch did not preserve exactly one original RackTop process.'
+            }
+          }
           Stop-Process -Id $appProcess.Id -Force
 
           $uninstaller = Get-ChildItem $nsisInstall -Recurse -Filter 'uninstall.exe' | Select-Object -First 1
