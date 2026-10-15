@@ -2,13 +2,17 @@
 set -eu
 umask 077
 
+if [ "${RACKTOP_COLLECTOR_BOUNDED:-0}" != 1 ]; then
+  exec timeout -k 5 60 env RACKTOP_COLLECTOR_BOUNDED=1 sh "$0"
+fi
+
 state_dir="$HOME/.racktop"
 history_file="$state_dir/.history-v1.tsv"
 usage_file="$state_dir/.usage-v1.tsv"
-lock_dir="$state_dir/.collect.lock"
 mkdir -p "$state_dir"
-if ! mkdir "$lock_dir" 2>/dev/null; then exit 0; fi
-trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT HUP INT TERM
+# Kernel locks are released even after SIGKILL or a reboot. Ignore the legacy directory lock.
+exec 9>"$state_dir/.usage.lock"
+flock -n 9 || exit 1
 
 now="$(date +%s)"
 bucket=$((now - now % 60))
@@ -126,9 +130,12 @@ if [ -r "$usage_file" ]; then
   case "$compacted_through" in *[!0-9]*|'') compacted_through=0 ;; esac
   if [ "$compacted_through" -lt "$compact_before" ]; then
     usage_temporary="$usage_file.tmp.$$"
+    protected_hours="$state_dir/.usage-minute-hours"
+    [ -f "$protected_hours" ] || : > "$protected_hours"
     awk -F '|' -v cutoff="$cutoff" -v compact_before="$compact_before" '
+      FILENAME == ARGV[1] { if ($1 >= cutoff-3600) protected[$1]=1; next }
       ($1 == "v1" || $1 == "v2") && $2 >= cutoff {
-        if ($2 < compact_before) {
+        if ($2 < compact_before && !protected[$2-$2%3600]) {
           hour=$2-$2%3600; key=hour FS $3 FS $4
           active[key]+=$5; memory[key]+=$6; coverage[key]+=$7
         } else print
@@ -139,7 +146,7 @@ if [ -r "$usage_file" ]; then
           printf "v2|%d|%s|%s|%d|%.2f|%d\n",a[1],a[2],a[3],active[key],memory[key],coverage[key]
         }
       }
-    ' "$usage_file" > "$usage_temporary"
+    ' "$protected_hours" "$usage_file" > "$usage_temporary"
     mv "$usage_temporary" "$usage_file"
     printf '%s\n' "$compact_before" > "$usage_compact_marker"
   fi
