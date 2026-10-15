@@ -22,7 +22,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it.each([[2, '1048px'], [3, '1578px'], [4, '2108px'], [5, '2638px']])('respects a maximum of %s cards without changing the base card width', async (maximum, cappedWidth) => {
+it.each([[2, 1255.2], [3, 1888.8], [4, 2522.4], [5, 3156]])('respects a maximum of %s cards with bounded horizontal adjustment', async (maximum, cappedWidth) => {
   const settings = await api.getSettings()
   vi.spyOn(api, 'getSettings').mockResolvedValue({ ...settings, maxCardsPerRow: Number(maximum) })
   let width = 1100
@@ -52,10 +52,10 @@ it.each([[2, '1048px'], [3, '1578px'], [4, '2108px'], [5, '2638px']])('respects 
   expect(style.getPropertyValue('--card-base-width')).toBe('518px')
   expect(style.getPropertyValue('--card-page-width')).toBe('1048px')
   expect(resize).toBeDefined()
-  for (const [available, expected] of [[1099, '518px'], [1100, '1048px'], [3200, cappedWidth], [400, '518px']]) {
+  for (const [available, expected] of [[1099, 1047], [1100, 1048], [3200, Math.min(3148, cappedWidth)], [400, 348]]) {
     width = Number(available)
     act(() => resize!())
-    expect(style.getPropertyValue('--card-page-width')).toBe(expected)
+    expect(Number.parseFloat(style.getPropertyValue('--card-page-width'))).toBeCloseTo(Number(expected))
     expect(style.getPropertyValue('--card-base-width')).toBe('518px')
   }
   const shell = container.querySelector<HTMLElement>('.app-shell')!
@@ -67,7 +67,7 @@ it.each([[2, '1048px'], [3, '1578px'], [4, '2108px'], [5, '2638px']])('respects 
   expect(style.getPropertyValue('--card-page-width')).toBe('1180px')
   act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '-', metaKey: true })))
   expect(shell.dataset.zoomLayout).toBe('fixed')
-  expect(style.getPropertyValue('--card-page-width')).toBe('518px')
+  expect(style.getPropertyValue('--card-page-width')).toBe('948px')
   expect(style.getPropertyValue('--card-base-width')).toBe('518px')
   act(() => root!.unmount())
   root = undefined
@@ -122,7 +122,8 @@ it.each([0, 13, 17])('preserves the original card width with a %spx scrollbar', 
   expect(style.getPropertyValue('--card-page-inset')).toBe(`${52 - gutter}px`)
   clientWidth -= 1
   act(() => resize!())
-  expect(style.getPropertyValue('--card-page-width')).toBe('518px')
+  expect(style.getPropertyValue('--card-page-width')).toBe('1047px')
+  expect(style.getPropertyValue('--card-columns')).toBe('2')
   expect(style.getPropertyValue('--card-base-width')).toBe('518px')
   act(() => root!.unmount())
   root = undefined
