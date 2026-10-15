@@ -1187,10 +1187,10 @@ fieldset { min-width: 0; margin: 0; padding: 0; border: 0; } legend { margin-bot
 }
 .gpu-grid, .gpu-detail-list, .trend-grid, .resource-trend-grid,
 .history-heatmap-list, .usage-waffle-list, .fleet-grid, .idle-grid, .project-grid {
-  --card-min-width: var(--card-base-width, 584px);
-  max-width: calc(var(--max-card-columns, 3) * var(--card-min-width) + (var(--max-card-columns, 3) - 1) * var(--card-gap, 12px));
+  --card-min-width: var(--card-fit-width, var(--card-base-width, 584px));
+  max-width: calc(var(--card-columns, 2) * var(--card-min-width) + (var(--card-columns, 2) - 1) * var(--card-gap, 12px));
   justify-content: center;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min-width)), var(--card-min-width)));
+  grid-template-columns: repeat(var(--card-columns, 2), minmax(0, 1fr));
 }
 .gpu-detail-list, .resource-trend-grid { --card-gap: 10px; }
 .history-heatmap-list, .usage-waffle-list { --card-gap: 10px; }

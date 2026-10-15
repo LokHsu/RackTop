@@ -1,0 +1,11 @@
+# Routing and release policy changes need particular attention during review.
+/AGENTS.md @Tongzh-SEU
+/CONTRIBUTING.md @Tongzh-SEU
+/.github/ @Tongzh-SEU
+/scripts/contribution-policy.cjs @Tongzh-SEU
+/scripts/contribution-policy-checks.cjs @Tongzh-SEU
+/package.json @Tongzh-SEU
+/src-tauri/Cargo.toml @Tongzh-SEU
+/src-tauri/tauri*.conf.json @Tongzh-SEU
+/docs/VERSION_INFOS.md @Tongzh-SEU
+/docs/Version_overview.md @Tongzh-SEU

@@ -20,11 +20,16 @@ on:
         default: true
   pull_request:
   push:
+    branches:
+      - develop
     tags:
       - "v*"
 
 permissions:
   contents: read
+
+env:
+  REVIEW_BUILD: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
   linux:
@@ -47,10 +52,10 @@ jobs:
       - run: npm run test
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - name: Build Linux review packages
-        if: github.event_name == 'pull_request'
+        if: env.REVIEW_BUILD == 'true'
         run: npm run bundle:linux -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Build signed Linux release packages
-        if: github.event_name != 'pull_request'
+        if: env.REVIEW_BUILD != 'true'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -67,7 +72,7 @@ jobs:
           APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' -type f -print -quit)
           test -n "$APPIMAGE_PATH"
           APPIMAGE_PATH=$(realpath "$APPIMAGE_PATH")
-          if [ "${{ github.event_name }}" != 'pull_request' ]; then
+          if [ "$REVIEW_BUILD" != 'true' ]; then
             test -s "$APPIMAGE_PATH.sig"
           fi
           xvfb-run -a dbus-run-session -- bash scripts/smoke-linux.sh "$APP_PATH"
@@ -114,7 +119,7 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Import Apple Developer ID certificate
-        if: github.event_name != 'pull_request'
+        if: env.REVIEW_BUILD != 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -166,14 +171,14 @@ jobs:
           echo "RACKTOP_MARK_UNSIGNED=0" >> "$GITHUB_ENV"
 
       - name: Build and verify macOS review DMG
-        if: github.event_name == 'pull_request'
+        if: env.REVIEW_BUILD == 'true'
         env:
           RACKTOP_MACOS_TARGET: aarch64-apple-darwin
           RACKTOP_MARK_UNSIGNED: "1"
         run: npm run bundle:macos
 
       - name: Build, sign, notarize, and verify macOS DMG
-        if: github.event_name != 'pull_request'
+        if: env.REVIEW_BUILD != 'true'
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -195,7 +200,7 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.signing.txt
 
       - name: Upload verified macOS updater package
-        if: github.event_name != 'pull_request'
+        if: env.REVIEW_BUILD != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: RackTop_${{ env.RACKTOP_VERSION }}_macos-arm64-updater
@@ -225,14 +230,14 @@ jobs:
       - run: npm run test
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build Windows review installers
-        if: github.event_name == 'pull_request'
+        if: env.REVIEW_BUILD == 'true'
         shell: pwsh
         run: |
           $configPath = Join-Path $env:RUNNER_TEMP 'racktop-review.json'
           '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $configPath -Encoding utf8
           npm run tauri -- build --target x86_64-pc-windows-msvc --bundles msi,nsis --config $configPath
       - uses: tauri-apps/tauri-action@v1
-        if: github.event_name != 'pull_request'
+        if: env.REVIEW_BUILD != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

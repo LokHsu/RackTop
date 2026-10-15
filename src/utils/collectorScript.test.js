@@ -38,7 +38,7 @@ test.skipIf(process.platform === 'win32')('directory usage pairs du with subsequ
   expect(readFileSync(log, 'utf8')).toBe('du\n')
   expect(run('exit 1').stdout).toBe('0|scanning\n0|failed\n')
   expect(run('echo invalid').stdout).toBe('0|scanning\n0|failed\n')
-  expect(run('exit 1', { TEST_MOUNT: '/different' }).stdout).toBe('0|scanning\n0|unrecognized\n')
+  expect(run('exit 1', { TEST_MOUNT: '/different' }).stdout).toMatch(/^0\|scanning\n0\|success\|40\|100\|60\|0\|\d+\n$/)
   const nestedHome = join(directory, 'tester/sub')
   mkdirSync(nestedHome)
   writeFileSync(join(directory, 'stat'), '#!/bin/sh\nprintf "%s\\n" "$4"\n', { mode: 0o700 })

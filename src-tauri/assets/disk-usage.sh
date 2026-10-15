@@ -35,8 +35,16 @@ if [ "$1" = --mount ]; then
     printf '%s\n' "$identity" >> "$seen"
     set -- "$@" "$canonical"
   done
-  [ "$#" -gt 0 ] || { if [ "$duplicate" = 1 ]; then printf 'duplicate\n'; else printf 'unrecognized\n'; fi; exit 0; }
-  if usage=$(du -skx -- "$@" 2>"$errors"); then
+  if [ "$#" -eq 0 ]; then
+    if [ "$duplicate" = 1 ]; then
+      printf 'duplicate\n'
+      exit 0
+    fi
+    # A missing user directory means this user owns no files on the mount.
+    # It is a valid zero result; failures from the actual scan still use the
+    # explicit failure/permission states below.
+    user_kb=0
+  elif usage=$(du -skx -- "$@" 2>"$errors"); then
     user_kb=$(printf '%s\n' "$usage" | awk '$1 !~ /^[0-9]+$/ {invalid=1} {sum += $1} END {if (invalid || NR == 0) exit 1; printf "%.0f", sum}') || { printf 'failed\n'; exit 0; }
   else
     failure

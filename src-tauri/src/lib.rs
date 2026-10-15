@@ -758,10 +758,9 @@ async fn sync_remote_history(
         .map(|point| point.timestamp)
         .max()
         .or(server.remote_history_last_sync_at);
-    let imported_count = database.import_remote_history(&server_id, &points)?;
-    let usage_imported = database.import_remote_usage(&server_id, &usage_points, now)?;
+    let imported_count = database.import_remote_data(&server_id, &points, &usage_points, now)?;
     Ok(RemoteHistorySyncResult {
-        imported_count: imported_count + usage_imported,
+        imported_count,
         latest_timestamp,
     })
 }

@@ -14,6 +14,12 @@ interface SharedGpuWatch {
 
 export type SharedGpuWatchMap = Map<string, SharedGpuWatch>
 
+export function mergeMineProcessWarnings(current: MineProcessWarning[], serverId: string, next: MineProcessWarning[]) {
+  const byId = new Map(current.filter((warning) => warning.serverId !== serverId || warning.id.startsWith('exit:')).map((warning) => [warning.id, warning]))
+  for (const warning of next) { byId.delete(warning.id); byId.set(warning.id, warning) }
+  return [...byId.values()].slice(-200)
+}
+
 function processKey(process: ProcessMetric) {
   return `${process.username}:${process.pid}`
 }

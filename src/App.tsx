@@ -94,9 +94,11 @@ import { duplicateImportIndexes } from './utils/serverIdentity'
 import { currentUserProcessCount, visibleCurrentUserCpuUtilization } from './utils/processRelations'
 import { automaticFleetSort, FLEET_SORT_MODE_STORAGE_KEY, initialFleetSortMode, sortFleetServers, type FleetSort, type FleetSortMode } from './utils/fleetSort'
 import { afterNextPaint } from './utils/afterPaint'
+import { fitCardLayout } from './utils/cardLayout'
 import { previewServerOrder, serverDropTarget, type ServerDropPlacement } from './utils/serverOrder'
 import { serverMatchesSearch } from './utils/serverSearch'
-import { updateSharedGpuWarnings, type MineProcessWarning, type SharedGpuWatchMap } from './utils/mineProcessWarnings'
+import { mergeMineProcessWarnings, updateSharedGpuWarnings, type MineProcessWarning, type SharedGpuWatchMap } from './utils/mineProcessWarnings'
+import { clearTrendHistoryCache } from './utils/trendHistoryCache'
 import { gpuContextName, serverDisplayName } from './utils/serverName'
 import { loadLaunchProfiles, loadManagedRuns } from './utils/managedRuns'
 import { detectAppPlatform } from './utils/platform'
@@ -113,6 +115,12 @@ const releaseUrl = (version: string) => `https://github.com/Tongzh-SEU/RackTop/r
 
 const ONBOARDING_DISMISSED_KEY = 'racktop.onboardingDismissed.v1'
 const CARD_PAGE_HORIZONTAL_INSET = 52
+const HISTORY_IMPORTED_EVENT = 'racktop:history-imported'
+
+function notifyHistoryImported(serverId: string) {
+  clearTrendHistoryCache(serverId)
+  window.dispatchEvent(new CustomEvent(HISTORY_IMPORTED_EVENT, { detail: serverId }))
+}
 
 const tabs: Array<{ value: DetailTab; label: string }> = [
   { value: 'overview', label: '概览' },
@@ -507,10 +515,8 @@ function App() {
         }
       }
       if (ignoredWarningsChanged) localStorage.setItem('racktop.ignoredMineProcessWarnings.v1', JSON.stringify([...ignoredMineProcessWarningsRef.current]))
-      setMineProcessWarnings((current) => [
-        ...current.filter((warning) => warning.serverId !== serverId || warning.id.startsWith('exit:')),
-        ...nextServerWarnings.filter((warning) => !ignoredMineProcessWarningsRef.current.has(warning.id)),
-      ])
+      setMineProcessWarnings((current) => mergeMineProcessWarnings(current, serverId,
+        nextServerWarnings.filter((warning) => !ignoredMineProcessWarningsRef.current.has(warning.id))))
       snapshotsRef.current = { ...snapshotsRef.current, [serverId]: snapshot }
       if (shouldRetryRemoteSyncAfterRecovery(remoteSyncStatusRef.current, serverId, remoteSyncRecoveryQueued.current.has(serverId))) {
         remoteSyncRecoveryQueued.current.add(serverId)
@@ -881,6 +887,7 @@ function App() {
           if (lastError || !result) throw lastError ?? new Error('历史同步未返回结果')
           remoteSyncRecoveryQueued.current.delete(server.id)
           importedCount += result.importedCount
+          if (!cancelled && result.importedCount > 0) notifyHistoryImported(server.id)
           if (!cancelled && result.latestTimestamp) {
             setServers((current) => current.map((item) => item.id === server.id && item.remoteHistoryLastSyncAt !== result.latestTimestamp ? { ...item, remoteHistoryLastSyncAt: result.latestTimestamp } : item))
           }
@@ -998,9 +1005,8 @@ function App() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>('.app-shell')
     if (!root) return
-    // Freeze the original two-column width at the initial, unscaled window size.
-    // At or below 100%, resizing changes the column count, not the base width.
-    // Above 100%, CSS uses the stable release's flexible card widths instead.
+    // Keep the initial two-column size as the baseline while allowing bounded
+    // horizontal adjustment as the window changes size.
     const sidebarWidth = Math.min(248, Math.max(220, window.innerWidth * 0.16))
     const originalContentWidth = Math.min(1180, window.innerWidth - sidebarWidth - CARD_PAGE_HORIZONTAL_INSET)
     const cardWidth = Math.max(1, (originalContentWidth - 12) / 2)
@@ -1018,8 +1024,10 @@ function App() {
       // Keep the same page center when switching to the scrollbar-free terminal.
       root.style.setProperty('--card-page-offset', `${zoom > 1 ? 0 : (CARD_PAGE_HORIZONTAL_INSET - pageInset) / 2}px`)
       const availableWidth = Math.max(0, cardScroller.clientWidth - pageInset)
-      const columns = Math.max(1, Math.min(maxCardsPerRow, Math.floor((availableWidth + 12) / (cardWidth + 12))))
-      root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : columns * cardWidth + (columns - 1) * 12}px`)
+      const fitted = fitCardLayout(availableWidth, cardWidth, maxCardsPerRow)
+      root.style.setProperty('--card-fit-width', `${fitted.cardWidth}px`)
+      root.style.setProperty('--card-columns', String(fitted.columns))
+      root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : fitted.pageWidth}px`)
     }
     const cardLayoutObserver = new ResizeObserver(fitCardPage)
     cardLayoutRefreshRef.current = (maximum) => {
@@ -1048,7 +1056,7 @@ function App() {
       else if (event.key === '0') { event.preventDefault(); zoom = 1; applyZoom() }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-page-inset'); root.style.removeProperty('--card-page-offset'); root.style.removeProperty('--card-base-width'); root.style.removeProperty('--max-card-columns'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {}; cardLayoutRefreshRef.current = () => {} }
+    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-page-inset'); root.style.removeProperty('--card-page-offset'); root.style.removeProperty('--card-base-width'); root.style.removeProperty('--card-fit-width'); root.style.removeProperty('--card-columns'); root.style.removeProperty('--max-card-columns'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {}; cardLayoutRefreshRef.current = () => {} }
   }, [])
 
   useEffect(() => {
@@ -1337,6 +1345,7 @@ function App() {
         try { await api.configureRemoteHistory(saved.id) } catch (reason) { setToast(`服务器已保存；停止远端历史失败：${String(reason)}`) }
       }
       if (sync?.latestTimestamp) setServers((current) => current.map((item) => item.id === saved.id ? { ...item, remoteHistoryLastSyncAt: sync?.latestTimestamp ?? item.remoteHistoryLastSyncAt } : item))
+      if (sync && sync.importedCount > 0) notifyHistoryImported(saved.id)
     })()
     await refreshServer(saved.id)
   }
@@ -1478,6 +1487,7 @@ function App() {
     try {
       const deletion = await api.deleteServer(server.id, revokeSshAccess)
       const remainingProjects = await api.listProjects()
+      clearTrendHistoryCache(server.id)
       const nextSelectedId = servers.find((item) => item.id !== server.id)?.id ?? null
       setServers((current) => current.filter((item) => item.id !== server.id))
       setProjects(remainingProjects)
@@ -2191,6 +2201,14 @@ function CpuDetail({ snapshot, points, animateChart }: { snapshot: Snapshot; poi
 }
 
 export function HistoryView({ server, snapshot }: { server: Server; snapshot: Snapshot }) {
+  const [importRevision, setImportRevision] = useState(0)
+  useEffect(() => {
+    const imported = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === server.id) setImportRevision((revision) => revision + 1)
+    }
+    window.addEventListener(HISTORY_IMPORTED_EVENT, imported)
+    return () => window.removeEventListener(HISTORY_IMPORTED_EVENT, imported)
+  }, [server.id])
   const [maintenance, setMaintenance] = useState<boolean | null>(null)
   const [maintenanceError, setMaintenanceError] = useState(false)
   useEffect(() => {
@@ -2232,7 +2250,7 @@ export function HistoryView({ server, snapshot }: { server: Server; snapshot: Sn
     void loadHeatmap()
     const interval = window.setInterval(() => { void loadHeatmap() }, 3_600_000)
     return () => { cancelled = true; window.clearInterval(interval) }
-  }, [gpuUuidKey, server.historyRetentionDays, server.id, maintenance])
+  }, [gpuUuidKey, server.historyRetentionDays, server.id, server.remoteHistoryLastSyncAt, importRevision, maintenance])
 
   useEffect(() => {
     if (maintenance !== false) return
@@ -2248,7 +2266,7 @@ export function HistoryView({ server, snapshot }: { server: Server; snapshot: Sn
     loadUsage()
     const interval = window.setInterval(loadUsage, 3_600_000)
     return () => { cancelled = true; window.clearInterval(interval) }
-  }, [server.id, usageDays, maintenance])
+  }, [server.id, server.remoteHistoryLastSyncAt, importRevision, usageDays, maintenance])
 
   const displayedUsage = usage ?? { users: [], coveredDays: 0, requestedDays: usageDays, coverageGpuSeconds: 0 }
 

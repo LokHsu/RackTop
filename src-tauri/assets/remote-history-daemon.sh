@@ -23,7 +23,7 @@ while :; do
   heartbeat_time="$(stat -c %Y "$heartbeat" 2>/dev/null || stat -f %m "$heartbeat" 2>/dev/null || printf 0)"
   case "$heartbeat_time" in *[!0-9]*|'') heartbeat_time=0 ;; esac
   if [ $((now - heartbeat_time)) -gt 90 ]; then
-    sh "$collector" || true
+    sh "$collector" || printf '采集失败或超过 60 秒\n' >&2
   fi
   sleep 60
 done

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProcessMetric, Snapshot } from '../types/models'
-import { updateSharedGpuWarnings, type SharedGpuWatchMap } from './mineProcessWarnings'
+import { mergeMineProcessWarnings, updateSharedGpuWarnings, type MineProcessWarning, type SharedGpuWatchMap } from './mineProcessWarnings'
 
 const process = (pid: number, username: string, isCurrentUser: boolean): ProcessMetric => ({
   gpuUuid: 'gpu-0', gpuIndex: 0, pid, parentPid: 1, username, command: `python ${pid}.py`, memoryUsedMb: 3072, smUtilization: 0, cpuPercent: 0, elapsed: '00:10', isCurrentUser, isGroupLeader: true,
@@ -14,6 +14,16 @@ const snapshot = (processes: ProcessMetric[]): Snapshot => ({
 })
 
 describe('updateSharedGpuWarnings', () => {
+  it('retains only the latest 200 distinct warnings and removes stale shared warnings', () => {
+    let warnings: MineProcessWarning[] = []
+    for (let i = 0; i < 10000; i++) warnings = mergeMineProcessWarnings(warnings, 'server-1', [{ id: `exit:${i}`, serverId: 'server-1', message: String(i), tone: 'warning' }])
+    expect(warnings).toHaveLength(200)
+    expect(warnings[0].id).toBe('exit:9800')
+    expect(mergeMineProcessWarnings(warnings, 'server-1', [warnings[199]])).toHaveLength(200)
+    warnings = mergeMineProcessWarnings(warnings, 'server-2', [{ id: 'shared:old', serverId: 'server-2', message: 'old', tone: 'warning' }])
+    expect(mergeMineProcessWarnings(warnings, 'server-2', [])).not.toContainEqual(expect.objectContaining({ id: 'shared:old' }))
+  })
+
   it('uses existing other-user processes as the baseline and only warns for newcomers', () => {
     const watches: SharedGpuWatchMap = new Map()
     const mine = process(100, 'me', true)

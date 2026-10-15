@@ -117,7 +117,8 @@ export function SshTerminal({ serverId, serverName, gpuIndex, acceleratorVendor 
     const dataDisposable = terminal.onData((data) => {
       if (previewInput) { previewInput(data); return }
       if (pendingEnterRef.current) return
-      if (gpuIndex !== undefined && (data === '\r' || data === '\n')) {
+      if (gpuIndex === undefined) { send(data); return }
+      if (data === '\r' || data === '\n') {
         const analysis = analyzeCudaCommand(lineRef.current, gpuIndex)
         lineRef.current = ''
         if (analysis.requiresConfirmation) { pendingEnterRef.current = true; setConfirmation(analysis.message ?? '无法确认 GPU 绑定，仍要执行吗？'); return }
