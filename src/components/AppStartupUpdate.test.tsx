@@ -2,7 +2,7 @@
 
 import { StrictMode, act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import packageInfo from '../../package.json'
 import { api } from '../services/api'
@@ -26,6 +26,12 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 let root: ReturnType<typeof createRoot> | null = null
+
+beforeEach(() => {
+  // Update checks do not need demo servers or their delayed background collection.
+  vi.spyOn(api, 'listServers').mockResolvedValue([])
+  vi.spyOn(api, 'listLatestSnapshots').mockResolvedValue([])
+})
 
 afterEach(() => {
   if (root) act(() => root?.unmount())

@@ -2197,6 +2197,18 @@ impl Database {
             .collect())
     }
 
+    pub fn import_remote_data(
+        &self,
+        server_id: &str,
+        points: &[HistoryPoint],
+        usage: &[UsagePoint],
+        now: i64,
+    ) -> Result<usize, String> {
+        // A failed usage import must not commit a newer shared sync cursor.
+        let usage_imported = self.import_remote_usage(server_id, usage, now)?;
+        Ok(usage_imported + self.import_remote_history(server_id, points)?)
+    }
+
     pub fn remote_history_cursor(&self, server_id: &str, now: i64) -> Result<i64, String> {
         let server = self.get_server(server_id)?;
         Ok(server
@@ -4484,6 +4496,18 @@ mod tests {
                 .unwrap(),
             point.timestamp - 60
         );
+
+        let usage = UsagePoint { timestamp: point.timestamp + 60, bucket_seconds: 60, gpu_uuid: "GPU-a".into(), username: "alice".into(), active_seconds: 60, memory_mb_seconds: 60_000.0, coverage_seconds: 60 };
+        let newer = HistoryPoint { timestamp: point.timestamp + 120, ..point.clone() };
+        db.connection.lock().unwrap().execute_batch(
+            "CREATE TRIGGER fail_usage BEFORE INSERT ON usage_buckets BEGIN SELECT RAISE(ABORT,'injected usage failure'); END;"
+        ).unwrap();
+        assert!(db.import_remote_data(&server.id, std::slice::from_ref(&newer), std::slice::from_ref(&usage), newer.timestamp + 3600).is_err());
+        assert_eq!(db.get_server(&server.id).unwrap().remote_history_last_sync_at, Some(point.timestamp));
+        db.connection.lock().unwrap().execute_batch("DROP TRIGGER fail_usage").unwrap();
+        assert_eq!(db.import_remote_data(&server.id, std::slice::from_ref(&newer), std::slice::from_ref(&usage), newer.timestamp + 3600).unwrap(), 2);
+        assert_eq!(db.import_remote_data(&server.id, &[newer.clone()], &[usage], newer.timestamp + 3600).unwrap(), 0);
+        assert_eq!(db.get_server(&server.id).unwrap().remote_history_last_sync_at, Some(newer.timestamp));
     }
 
     #[test]

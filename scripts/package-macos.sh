@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT_DIR/scripts/macos-dmg.sh"
 APP_VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
 TARGET="${RACKTOP_MACOS_TARGET:-aarch64-apple-darwin}"
 SKIP_BUILD="${RACKTOP_SKIP_BUILD:-0}"
@@ -53,7 +54,7 @@ RW_DMG_PATH=""
 
 cleanup() {
   if [ -n "$MOUNT_DIR" ] && mount | grep -Fq "on $MOUNT_DIR "; then
-    hdiutil detach "$MOUNT_DIR" >/dev/null || true
+    detach_dmg "$MOUNT_DIR" || true
   fi
   case "$STAGE_DIR" in
     /private/tmp/racktop-dmg.*) rm -rf "$STAGE_DIR" ;;
@@ -149,13 +150,14 @@ tell application "Finder"
     open
     update without registering applications
     delay 2
+    close container window
   end tell
 end tell
 end run
 APPLESCRIPT
 
 sync
-hdiutil detach "$MOUNT_DIR" >/dev/null
+detach_dmg "$MOUNT_DIR"
 MOUNT_DIR=""
 hdiutil convert "$RW_DMG_PATH" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" -ov
 rm -f "$RW_DMG_PATH"
@@ -186,7 +188,7 @@ codesign --verify --deep --strict --verbose=2 "$MOUNT_DIR/RackTop.app"
 if [ "$NOTARIZATION_MODE" = "notarized and stapled" ]; then
   spctl --assess --type execute --verbose=2 "$MOUNT_DIR/RackTop.app"
 fi
-hdiutil detach "$MOUNT_DIR" >/dev/null
+detach_dmg "$MOUNT_DIR"
 rmdir "$MOUNT_DIR"
 MOUNT_DIR=""
 

@@ -35,6 +35,27 @@ function expectNoQueries() {
 }
 
 describe('history maintenance gate', () => {
+  it('reloads heatmap and distribution immediately when remote backfill advances', async () => {
+    vi.spyOn(api, 'isStorageMaintenanceActive').mockResolvedValue(false)
+    const server = (await api.listServers())[0]
+    const snapshot = (await api.listLatestSnapshots())[0]
+    await act(async () => root.render(<HistoryView server={server} snapshot={snapshot} />))
+    expect(api.getHistoryHeatmap).toHaveBeenCalledTimes(1)
+    expect(api.getUsageDistribution).toHaveBeenCalledTimes(1)
+    await act(async () => root.render(<HistoryView server={{ ...server, remoteHistoryLastSyncAt: (server.remoteHistoryLastSyncAt ?? 0) + 60 }} snapshot={snapshot} />))
+    expect(api.getHistoryHeatmap).toHaveBeenCalledTimes(2)
+    expect(api.getUsageDistribution).toHaveBeenCalledTimes(2)
+    // Usage-only imports may leave the history timestamp unchanged.
+    await act(async () => { window.dispatchEvent(new CustomEvent('racktop:history-imported', { detail: 'other-server' })) })
+    expect(api.getUsageDistribution).toHaveBeenCalledTimes(2)
+    await act(async () => { window.dispatchEvent(new CustomEvent('racktop:history-imported', { detail: server.id })) })
+    expect(api.getHistoryHeatmap).toHaveBeenCalledTimes(3)
+    expect(api.getUsageDistribution).toHaveBeenCalledTimes(3)
+    await act(async () => root.render(null))
+    await act(async () => { window.dispatchEvent(new CustomEvent('racktop:history-imported', { detail: server.id })) })
+    expect(api.getUsageDistribution).toHaveBeenCalledTimes(3)
+  })
+
   it('does not query until the initial status resolves', async () => {
     let resolve!: (value: boolean) => void
     vi.spyOn(api, 'isStorageMaintenanceActive').mockImplementation(() => new Promise((done) => { resolve = done }))

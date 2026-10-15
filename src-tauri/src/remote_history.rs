@@ -12,6 +12,7 @@ use tokio::time::{Duration, timeout};
 const REMOTE_DIRECTORY: &str = "$HOME/.racktop";
 const REMOTE_COLLECTOR_SCRIPT: &str = concat!(include_str!("../assets/ascend-collector.sh"), include_str!("../assets/remote-history-collector.sh"));
 const REMOTE_DAEMON_SCRIPT: &str = include_str!("../assets/remote-history-daemon.sh");
+const REMOTE_USAGE_SCRIPT: &str = include_str!("../assets/remote-history-usage.sh");
 const REMOTE_REMOVE_SCRIPT: &str = r#"set -eu
 state=$HOME/.racktop
 if [ -r "$state/.daemon.pid" ]; then
@@ -115,9 +116,7 @@ pub async fn fetch_usage(
         return Ok(Vec::new());
     }
     let since = since_timestamp.max(0);
-    let script = format!(
-        "usage={REMOTE_DIRECTORY}/.usage-v1.tsv; if [ -r \"$usage\" ]; then awk -F '|' -v since={since} '($1 == \"v1\" || $1 == \"v2\") && $2 >= since' \"$usage\"; fi"
-    );
+    let script = format!("set -- {since}\n{}", REMOTE_USAGE_SCRIPT.replace("\r\n", "\n"));
     let output = run_remote_command(server, password, &script, Duration::from_secs(20)).await?;
     Ok(output
         .lines()
@@ -137,6 +136,8 @@ async fn install(server: &Server, password: Option<&str>) -> Result<(), String> 
         r#"set -e
 set -u
 state={REMOTE_DIRECTORY}
+command -v flock >/dev/null 2>&1 || {{ printf '远端历史需要 util-linux 的 flock 命令' >&2; exit 1; }}
+command -v timeout >/dev/null 2>&1 || {{ printf '远端历史需要 timeout 命令' >&2; exit 1; }}
 mkdir -p "$state"
 chmod 700 "$state"
 printf '%s' '{encoded}' | base64 -d > "$state/.collector.sh"
