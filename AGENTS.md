@@ -170,7 +170,7 @@ RackTop 是高信息密度的实时监控工具，动效应遵循以下原则：
 
 ## 3 需求完成后的版本管理与 GitHub 交付工作流
 
-每当完成一个独立、可交付的需求，包括新增功能、Bug 修复、功能优化、重构、兼容性调整或文档变更，开发 Agent 必须同步完成版本号计算、版本说明更新、验证、Git 提交以及 GitHub 上传。不得只修改代码而遗漏版本信息，也不得在交付完成后把版本记录延迟到下一次需求。
+普通贡献按“功能分支 → PR 审核 → develop → 版本 PR 审核 → main”交付。贡献者负责代码、验证和 PR 变更说明；维护者统一指定产品版本、整理正式版本记录并决定是否发布。普通贡献不得自行升级版本或修改正式版本记录。
 
 仅修改 `Agent.md` 中的 Agent 工作规范，或单独补充由详细版本记录派生的 `docs/Version_overview.md`，属于开发流程维护，不计入 RackTop 产品版本，不修改 npm、Cargo、Tauri 版本号，也不新增产品版本条目；仍应提交并推送该规范变更。
 
@@ -180,18 +180,20 @@ RackTop 是高信息密度的实时监控工具，动效应遵循以下原则：
 
 1. 已完成需求范围内的代码、测试、配置和文档修改；
 2. 已执行适用的检查、测试和构建，或明确记录未执行原因；
-3. 已根据当前最新版本计算新版本号；
-4. 已同步更新详细版本说明 `docs/VERSION_INFOS.md` 与简明更新说明 `docs/Version_overview.md`；
-5. 已创建包含当前版本号的 Git 提交；
+3. 普通贡献保持现有产品版本；仅维护者准备版本时计算新版本号；
+4. 普通贡献在 PR 正文记录变化；维护者准备版本时同步整理 `docs/VERSION_INFOS.md` 与 `docs/Version_overview.md`；
+5. 已创建说明本次需求的 Git 提交；普通贡献不要求版本号前缀；
 6. 已将提交推送到 RackTop GitHub 仓库；
 7. 项目采用 Pull Request 流程时，已创建或更新对应 PR；
-8. 产品版本已合并到默认分支后，已创建对应版本标签与 GitHub Release；
-9. 已向 GitHub Release 上传实际构建并验证过的安装包，并记录文件校验值；
-10. 已在最终交付说明中报告版本、提交、分支、推送目标、PR、Release、安装包和验证结果。
+8. 版本完成后，由维护者通过 `develop → main` PR 审核交付；普通功能 PR 不直接进入 `main`；
+9. 只有维护者明确要求发布时，才创建标签、Release、上传安装包和更新自动更新清单；
+10. 已报告提交、分支、推送目标、PR 和验证结果；版本发布任务另外报告版本、Release 与安装包。
 
 如果因为 GitHub 鉴权、仓库未授权、远程地址错误、网络、分支保护、权限不足、测试失败或其他客观原因无法完成提交或上传，必须明确报告真实阻塞原因，不得声称已经提交、推送或创建 PR。
 
 ### 版本号规则
+
+以下规则只用于维护者准备版本；普通功能 PR 不执行版本递增。涉及产品版本字段或正式版本记录的开发 PR，必须由维护者添加 `release-preparation` 标签后才能合并，该标签不代表允许发布。
 
 RackTop 使用 `主版本.次版本.修订版本`（`x.y.z`）格式。
 
@@ -301,7 +303,7 @@ docs/Version_overview.md
 
 ### Git 提交说明
 
-完成需求并同步更新 `docs/VERSION_INFOS.md` 与 `docs/Version_overview.md` 后，Git 提交说明必须包含本次当前版本号。
+普通贡献使用 `<type>: <变更摘要>`，不要求版本号。只有维护者准备产品版本并同步两个版本说明文件时，提交说明才必须包含当前版本号。
 
 统一格式：
 
@@ -337,40 +339,50 @@ v0.2.0 feat: 增加 GPU 告警规则管理
 - 实际验证结果；
 - 已知限制或未执行的验证。
 
-详细版本说明和简明更新说明必须与对应代码、测试和文档放在同一个需求提交中，不得先提交代码后遗漏任一版本记录，也不得把无关修改混入同一提交。
+维护者准备版本时，两个版本说明必须一起更新；普通贡献仅在 PR 正文记录变化。任何提交不得混入无关修改。
+
+### 分支与审核约束
+
+- 长期保留 `main`（稳定代码）、`develop`（下一版本集成）和 `updater`（自动更新清单），分支清理不得删除它们。
+- `develop` 初始从最新 `main` 创建，并作为 GitHub 默认分支；贡献者从最新 `develop` 创建短期功能分支，提交 PR 到 `develop`。
+- 功能 PR 经至少一位合作者批准、三平台 CI 和贡献规范检查通过后，才能合入 `develop`；禁止直接推送、强制推送或删除 `main`、`develop`。
+- 一个版本完成并验证后，通过本仓库的 `develop → main` PR 再次审核；`main` 不接收其他来源分支的普通 PR。
+- 版本合入 `main` 后，通过 `main → develop` 同步 PR 保持代码内容一致；同步 PR 同样需要审核和 CI，不通过重置或强制推送覆盖开发工作。
+- 普通功能 PR 不修改 npm、Cargo、Tauri 的产品版本字段或正式版本记录；依赖更新可以正常修改锁文件中的依赖信息。维护者准备版本时添加 `release-preparation` 标签。
+- `updater` 仅维护更新清单，不与开发分支互相合并。合并功能或版本 PR 均不自动授权发布 Release。
 
 ### GitHub 提交与上传流程
 
 需求完成后，开发 Agent 必须使用 GitHub 技能和可用的 Git 工具，将本次修改上传到 RackTop GitHub 仓库。
 
 1. 检查 `git status`、当前分支、远程仓库和完整差异，确认仓库确实是 RackTop。
-2. 只暂存当前需求相关的源代码、测试、配置、文档以及 `docs/VERSION_INFOS.md`，不得静默夹带无关修改。
-3. 如果当前位于默认分支，应按项目约定创建独立需求分支，例如：
+2. 只暂存当前需求相关的源代码、测试、配置和文档；普通贡献不修改正式版本记录，不得静默夹带无关修改。
+3. 从最新 `develop` 创建独立需求分支，不在 `main` 或 `develop` 上直接开发，例如：
 
    ```text
-   agent/v0.2.0-gpu-alert-rules
+   codex/gpu-alert-rules
    ```
 
-4. 使用包含版本号的提交说明创建 Git 提交。
+4. 使用说明需求的提交标题；仅版本准备提交要求版本号。
 5. 将当前分支推送到 RackTop 的远程 GitHub 仓库，并设置上游分支。
-6. 项目采用 Pull Request 流程时，应创建或更新对应 PR；默认创建 Draft PR，除非用户明确要求直接提交或标记为可审查。
-7. PR 标题必须包含版本号，格式可与提交说明保持一致，例如：
+6. 创建或更新以 `develop` 为目标的 PR；默认创建 Draft PR，除非用户明确要求标记为可审查。阶段性交付才使用 `develop → main` PR。
+7. 普通 PR 标题使用 `<type>: <变更摘要>`；维护者的版本 PR 才包含版本号，例如：
 
    ```text
    v0.2.0 feat: 增加 GPU 告警规则管理
    ```
 
-8. PR 说明至少应包含当前版本号、修改内容、修改原因、影响范围、验证结果和已知限制。
+8. PR 说明至少包含修改内容、原因、影响范围、验证结果和已知限制；普通贡献不自行指定下一版本号。
 9. 上传后核对远程分支、提交哈希和 PR 信息，确认上传结果真实存在。
 
 不得因为本地修改已经完成就省略 GitHub 上传。若 GitHub 技能不可用或仓库未授权，应停止虚假的上传声明，保留本地修改，并在交付说明中给出具体授权或修复步骤。
 
 ### GitHub Release 发布流程
 
-每个 RackTop 产品版本在代码合并到默认分支后，必须同步发布 GitHub Release。仅完成 Git 提交、分支推送或 Pull Request 合并，不代表版本已经发布。
+只有维护者明确要求发布时，才执行 GitHub Release 流程；普通功能 PR、合入 `develop` 或版本合入 `main` 均不自动触发发布。正式标签必须指向 `main` 中已验证的提交，不能以默认分支 `develop` 代替稳定分支。
 
-1. 确认默认分支已经包含当前版本提交，版本号与 `package.json`、Cargo、Tauri 配置以及版本说明一致。
-2. 使用 `vX.Y.Z` 格式创建版本标签，并确保标签指向默认分支中实际发布的提交；不得把正式版本标签留在尚未合并的功能分支提交上。
+1. 确认 `main` 已经包含当前版本提交，版本号与 `package.json`、Cargo、Tauri 配置以及版本说明一致。
+2. 使用 `vX.Y.Z` 格式创建版本标签，并确保标签指向`main`中实际发布的提交；不得把正式版本标签留在尚未合并的功能分支提交上。
 3. 创建同版本的 GitHub Release。正式可用版本应标记为 Latest，标题使用 `RackTop vX.Y.Z 稳定版`；测试版本应标记为 Pre-release，标题使用 `RackTop vX.Y.Z 测试版`。
 4. GitHub 页面顶部显示的作者、发布时间、Latest、版本标签、目标提交和“自此版本以来的提交数量”由 GitHub 自动生成，不得重复写入 Release 正文。
 5. Release 正文只允许“主要更新”和“下载”两个模块，不加入验证、测试数量、开发过程、提交记录和内部实现细节。
@@ -379,7 +391,7 @@ v0.2.0 feat: 增加 GPU 告警规则管理
 8. 发布后重新打开 Release 页面，核对标签、目标提交、Latest/Pre-release 状态、说明正文和所有附件均真实可见且可下载。
 9. 如果安装包构建、签名、公证、上传、标签创建或 Release 发布失败，必须明确报告为未完成，不得只提供本地 App 路径并声称版本已经发布。
 
-Release 发布不得夹带或修改工作区中的无关内容。创建标签和 Release 不要求将本地工作区切换到默认分支，但必须通过远程提交或 GitHub 页面确认标签的目标确实位于默认分支。
+Release 发布不得夹带或修改工作区中的无关内容。创建标签和 Release 不要求将本地工作区切换到`main`，但必须通过远程提交或 GitHub 页面确认标签的目标确实位于`main`。
 
 ### GitHub Actions 构建与安装包命名
 
@@ -400,9 +412,9 @@ RackTop 的 macOS、Windows、Linux 安装包和自动更新附件统一由 `.gi
 
 启用 Tauri Updater 的版本必须按以下固定顺序发布，避免客户端读取到附件尚未就绪的清单：
 
-1. 确认默认分支包含发布提交，npm、Cargo、Tauri 版本一致，updater 公钥正确，GitHub Actions 中 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 已配置；私钥和密码不得写入 Git、日志、Artifact 或 Release。
+1. 确认`main`包含发布提交，npm、Cargo、Tauri 版本一致，updater 公钥正确，GitHub Actions 中 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 已配置；私钥和密码不得写入 Git、日志、Artifact 或 Release。
 2. 构建并验证 macOS DMG、macOS `.app.tar.gz`、Windows NSIS `setup.exe`、Windows MSI、Linux DEB 和 AppImage；记录六个发布文件的 SHA-256，并保留 `.app.tar.gz.sig`、`setup.exe.sig` 和 `.AppImage.sig` 供生成清单。
-3. 创建指向默认分支发布提交的 `vX.Y.Z` 标签和 GitHub Release，上传且仅上传用户安装包与 macOS updater 技术附件：DMG、NSIS EXE、MSI、`.app.tar.gz`、DEB、AppImage。不得把 `latest.json` 或任何 `.sig` 作为 Release 附件。
+3. 创建指向`main`发布提交的 `vX.Y.Z` 标签和 GitHub Release，上传且仅上传用户安装包与 macOS updater 技术附件：DMG、NSIS EXE、MSI、`.app.tar.gz`、DEB、AppImage。不得把 `latest.json` 或任何 `.sig` 作为 Release 附件。
 4. 验证 Release 中六个附件真实可下载，文件名、版本、架构、大小和 SHA-256 与 Actions 产物一致；Release 正文的“下载”模块必须列出全部六个文件，但不得手动列出 SHA-256，校验值以 GitHub Assets 自动显示的 Digest 为准。
 5. 最后创建或更新独立 `updater` 分支根目录的 `latest.json`；没有该文件或没有当前平台条目时，已安装的 RackTop 无法识别和安装新版本。`darwin-aarch64` 指向 Release 的 `.app.tar.gz`，`windows-x86_64` 指向同一 Release 的 NSIS `setup.exe`，`linux-x86_64` 指向同一 Release 的 AppImage，对应 `.sig` 的完整内容内嵌到各平台 `signature` 字段。
 6. 从 GitHub Raw 地址重新读取 `latest.json`，确认 JSON 有效、版本正确、三个平台 URL 可下载且签名字段非空；清单提交与产品 Release 提交相互独立，不得把 updater 分支合并到 `main`。
