@@ -133,11 +133,19 @@ jobs:
           NOTARY_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ] || [ -z "$NOTARY_APPLE_ID" ] \
-            || [ -z "$NOTARY_APPLE_PASSWORD" ] || [ -z "$NOTARY_APPLE_TEAM_ID" ]; then
-            echo "No complete Apple signing/notarization configuration; building an unsigned DMG."
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            if [ -n "$APPLE_CERTIFICATE_PASSWORD$NOTARY_APPLE_ID$NOTARY_APPLE_PASSWORD$NOTARY_APPLE_TEAM_ID" ]; then
+              echo "Apple signing and notarization secrets are only partially configured." >&2
+              exit 1
+            fi
+            echo "No Apple certificate configured; the artifact will be marked unsigned."
             echo "RACKTOP_MARK_UNSIGNED=1" >> "$GITHUB_ENV"
             exit 0
+          fi
+          if [ -z "$APPLE_CERTIFICATE_PASSWORD" ] || [ -z "$NOTARY_APPLE_ID" ] \
+            || [ -z "$NOTARY_APPLE_PASSWORD" ] || [ -z "$NOTARY_APPLE_TEAM_ID" ]; then
+            echo "A certificate and all Apple notarization secrets must be configured together." >&2
+            exit 1
           fi
 
           CERTIFICATE_PATH="$RUNNER_TEMP/racktop-developer-id.p12"

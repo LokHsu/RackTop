@@ -27,10 +27,6 @@ for value in "${APPLE_ID:-}" "${APPLE_PASSWORD:-}" "${APPLE_TEAM_ID:-}"; do
     NOTARY_VALUES=$((NOTARY_VALUES + 1))
   fi
 done
-# Ignore partial Apple values when the workflow selected the unsigned path.
-if [ "$MARK_UNSIGNED" = "1" ]; then
-  NOTARY_VALUES=0
-fi
 if [ "$NOTARY_VALUES" -ne 0 ] && [ "$NOTARY_VALUES" -ne 3 ]; then
   printf 'APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID must be configured together.\n' >&2
   exit 1
