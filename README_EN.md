@@ -41,11 +41,11 @@ Current stable release: **v1.26.0**
 | --- | --- | --- |
 | macOS Apple Silicon | `RackTop_1.26.0_macos-arm64.dmg` | [Download for macOS](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_macos-arm64.dmg) |
 | Windows x64 | `RackTop_1.26.0_x64-setup.exe` | [Download for Windows](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_x64-setup.exe) |
-| Linux Ubuntu/Debian x64 | `RackTop_1.26.0_amd64.deb` (recommended, about 9.2 MB) | [Download for Linux](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_amd64.deb) |
+| Linux Ubuntu/Debian x64 | `RackTop_1.26.0_amd64.deb` (about 9.2 MB) | [Download for Linux](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_amd64.deb) |
 
 See [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases) for additional versions.
 
-The smaller DEB installer is recommended for Linux. A portable AppImage is also available on the Releases page above.
+A DEB installer is available for Linux. A portable AppImage is also available on the Releases page above.
 
 If macOS blocks the app the first time you open it, go to **System Settings → Privacy & Security** and allow the app to open.
 
