@@ -44,11 +44,11 @@ RackTop 是面向个人研究者和小型团队的 GPU 服务器桌面工作台�
 | --- | --- | --- |
 | macOS Apple Silicon | `RackTop_1.26.0_macos-arm64.dmg` | [下载 macOS 版本](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_macos-arm64.dmg) |
 | Windows x64 | `RackTop_1.26.0_x64-setup.exe` | [下载 Windows 版本](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_x64-setup.exe) |
-| Linux Ubuntu/Debian x64 | `RackTop_1.26.0_amd64.deb`（推荐，约 9.2 MB） | [下载 Linux 版本](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_amd64.deb) |
+| Linux Ubuntu/Debian x64 | `RackTop_1.26.0_amd64.deb`（约 9.2 MB） | [下载 Linux 版本](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_amd64.deb) |
 
 更多版本见 [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases)。
 
-Linux 推荐使用体积较小的 DEB 安装包；需要便携版本时，可在上方 Releases 页面下载 AppImage。
+Linux 提供 DEB 安装包；需要便携版本时，可在上方 Releases 页面下载 AppImage。
 
 macOS版本若首次打开时提示应用来源受限，请前往“系统设置 → 隐私与安全性”，确认允许打开该应用。
 Windows版本若提示“智能应用控制已阻止可能不安全的应用”，请在“设置”中搜索“智能应用控制”，并将其关闭。
