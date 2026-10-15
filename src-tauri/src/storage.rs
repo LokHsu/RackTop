@@ -1,4 +1,5 @@
 use crate::models::GpuTelemetryRanges;
+use crate::disk_scan::{DiskScanState, MountScanStatus};
 use crate::models::{
     AppSettings, HistoryHeatmapPoint, HistoryPoint, IdleReservation, Project, ProjectDraft,
     ProjectTarget, Server, ServerDraft, ServerNotificationSettings, Snapshot, UsageDistribution,
@@ -1211,6 +1212,11 @@ impl Database {
                     FOREIGN KEY(server_id) REFERENCES servers(id) ON DELETE CASCADE
                  );
                  CREATE INDEX IF NOT EXISTS idx_snapshots_lookup ON snapshots(server_id, timestamp);
+                 CREATE TABLE IF NOT EXISTS disk_scans (
+                    server_id TEXT PRIMARY KEY,
+                    payload_json TEXT NOT NULL,
+                    FOREIGN KEY(server_id) REFERENCES servers(id) ON DELETE CASCADE
+                 );
                  CREATE TABLE IF NOT EXISTS history_hourly_buckets (
                     server_id TEXT NOT NULL,
                     timestamp INTEGER NOT NULL,
@@ -1505,6 +1511,19 @@ impl Database {
         // the background after startup and retries on the next launch if busy.
         let _ = (repair_applied, retired_legacy);
         recover_interrupted_project_syncs(&connection)?;
+        // A process restart must not leave persisted scans permanently running.
+        let interrupted = {
+            let mut query = connection.prepare("SELECT payload_json FROM disk_scans").map_err(|error| error.to_string())?;
+            let rows = query.query_map([], |row| row.get::<_, String>(0)).map_err(|error| error.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())?
+        };
+        for payload in interrupted {
+            let mut state: DiskScanState = serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+            if state.running || state.queued {
+                state.finish(MountScanStatus::ConnectionFailed, crate::disk_scan::now());
+                connection.execute("UPDATE disk_scans SET payload_json=?2 WHERE server_id=?1", params![state.server_id, serde_json::to_string(&state).map_err(|error| error.to_string())?]).map_err(|error| error.to_string())?;
+            }
+        }
         Ok(Self {
             connection: Mutex::new(connection),
             session_passwords: Mutex::new(HashMap::new()),
@@ -2858,6 +2877,21 @@ impl Database {
                 }
             })
             .collect())
+    }
+
+    pub fn get_disk_scan(&self, server_id: &str) -> Result<Option<DiskScanState>, String> {
+        let connection = self.connection.lock().map_err(|error| error.to_string())?;
+        let payload: Option<String> = connection.query_row("SELECT payload_json FROM disk_scans WHERE server_id=?1", [server_id], |row| row.get(0)).optional().map_err(|error| error.to_string())?;
+        payload.map(|value| serde_json::from_str(&value).map_err(|error| error.to_string())).transpose()
+    }
+
+    pub fn save_disk_scan(&self, state: &DiskScanState) -> Result<(), String> {
+        let payload = serde_json::to_string(state).map_err(|error| error.to_string())?;
+        self.connection.lock().map_err(|error| error.to_string())?.execute(
+            "INSERT INTO disk_scans(server_id,payload_json) VALUES(?1,?2) ON CONFLICT(server_id) DO UPDATE SET payload_json=excluded.payload_json",
+            params![state.server_id, payload],
+        ).map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     pub fn get_settings(&self) -> Result<AppSettings, String> {
@@ -4756,6 +4790,32 @@ mod tests {
 
         db.finish_remote_cleanup(&saved.id, false).unwrap();
         assert!(db.list_remote_cleanup_tasks().unwrap().is_empty());
+    }
+
+    #[test]
+    fn disk_scan_recovers_interrupted_round_without_losing_successful_pair() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("disk-scan.sqlite");
+        let server_id;
+        {
+            let db = Database::open(&path).unwrap();
+            server_id = db.save_server(draft("disk-scan", 30)).unwrap().id;
+            let mut state = DiskScanState::new(&server_id);
+            state.prepare(&["/data".into(), "/slow".into()], 100, false);
+            state.mounts[0].status = MountScanStatus::Success;
+            state.mounts[0].collected_at = Some(110);
+            state.mounts[0].result = Some(crate::models::DiskMetric { mount_point: "/data".into(), total_bytes: 100, used_bytes: 40, available_bytes: 50, current_user_used_bytes: Some(10) });
+            db.save_disk_scan(&state).unwrap();
+        }
+        let db = Database::open(&path).unwrap();
+        let state = db.get_disk_scan(&server_id).unwrap().unwrap();
+        assert!(!state.queued && !state.running);
+        assert_eq!(state.mounts[0].result.as_ref().unwrap().current_user_used_bytes, Some(10));
+        assert_eq!(state.mounts[0].collected_at, Some(110));
+        assert_eq!(state.mounts[1].status, MountScanStatus::ConnectionFailed);
+        assert!(state.retry_at.unwrap() >= crate::disk_scan::now() + crate::disk_scan::RETRY_SECONDS - 1);
+        db.delete_server_record(&server_id, false).unwrap();
+        assert!(db.get_disk_scan(&server_id).unwrap().is_none());
     }
 
     #[test]

@@ -128,6 +128,18 @@ export interface Snapshot {
   nvidiaMessage?: string | null
 }
 
+export type MountScanStatus = 'pending' | 'scanning' | 'success' | 'timeout' | 'permissionDenied' | 'connectionFailed' | 'unrecognized' | 'duplicate' | 'failed' | 'busy'
+
+export interface DiskScanState {
+  serverId: string
+  queued: boolean
+  running: boolean
+  lastAttemptAt: number
+  nextRefreshAt: number
+  retryAt: number | null
+  mounts: { mountPoint: string; status: MountScanStatus; result: DiskMetric | null; collectedAt: number | null }[]
+}
+
 export interface DiskMetric {
   mountPoint: string
   usedBytes: number

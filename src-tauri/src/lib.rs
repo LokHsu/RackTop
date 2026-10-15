@@ -7,6 +7,7 @@ mod remote_history;
 mod ssh_config;
 mod ssh_keys;
 pub mod storage;
+pub mod disk_scan;
 mod terminal;
 
 #[cfg(target_os = "windows")]
@@ -595,10 +596,50 @@ fn list_latest_snapshots(database: State<'_, Database>) -> Result<Vec<Snapshot>,
 }
 
 #[tauri::command]
-async fn collect_disk_usage(database: State<'_, Database>, server_id: String, mounts: Vec<String>) -> Result<HashMap<String, u64>, String> {
-    let server = database.get_server(&server_id)?;
-    let password = if server.auth_method == "password" { database.get_password(&server_id, false)? } else { None };
-    collector::collect_disk_usage(&server, password.as_deref(), &mounts).await
+async fn collect_disk_usage(app: AppHandle, database: State<'_, Database>, manager: State<'_, disk_scan::DiskScanManager>, server_id: String, mounts: Vec<String>, force: Option<bool>) -> Result<disk_scan::DiskScanState, String> {
+    if mounts.len() > 16 || mounts.iter().any(|mount| !mount.starts_with('/') || mount.contains(['\n', '\r', '\0'])) {
+        return Err("磁盘挂载路径无效".into());
+    }
+    database.get_server(&server_id)?;
+    let Some(reservation) = manager.reserve(&server_id)? else {
+        return Ok(database.get_disk_scan(&server_id)?.unwrap_or_else(|| disk_scan::DiskScanState::new(&server_id)));
+    };
+    let mut state = database.get_disk_scan(&server_id)?.unwrap_or_else(|| disk_scan::DiskScanState::new(&server_id));
+    if state.running || state.queued {
+        state.finish(disk_scan::MountScanStatus::ConnectionFailed, disk_scan::now());
+        database.save_disk_scan(&state)?;
+    }
+    let mounts = state.prepare(&mounts, disk_scan::now(), force.unwrap_or(false));
+    if mounts.is_empty() { return Ok(state); }
+    database.save_disk_scan(&state)?;
+    let response = state.clone();
+    tauri::async_runtime::spawn(async move {
+        use disk_scan::MountScanStatus;
+        let Ok(_slot) = reservation.acquire().await else { return; };
+        let database = app.state::<Database>();
+        state.queued = false;
+        state.running = true;
+        if database.save_disk_scan(&state).is_err() { return; }
+        let credentials = database.get_server(&server_id).and_then(|server| {
+            let password = if server.auth_method == "password" { database.get_password(&server_id, false)? } else { None };
+            Ok((server, password))
+        });
+        let outcome = match credentials {
+            Ok((server, password)) => collector::scan_disk_usage(&server, password.as_deref(), &mounts, |update| {
+                state.apply(update);
+                database.save_disk_scan(&state)
+            }).await,
+            Err(_) => Err(MountScanStatus::ConnectionFailed),
+        };
+        state.finish(outcome.err().unwrap_or(MountScanStatus::Failed), disk_scan::now());
+        let _ = database.save_disk_scan(&state);
+    });
+    Ok(response)
+}
+
+#[tauri::command]
+fn get_disk_scan(database: State<'_, Database>, server_id: String) -> Result<Option<disk_scan::DiskScanState>, String> {
+    database.get_disk_scan(&server_id)
 }
 
 #[tauri::command]
@@ -1348,6 +1389,7 @@ pub fn run() {
             })?;
             app.manage(database);
             app.manage(TerminalManager::default());
+            app.manage(disk_scan::DiskScanManager::default());
             app.manage(InteractionLogStore::default());
 
             app.state::<Database>().set_maintenance(true);
@@ -1450,6 +1492,7 @@ pub fn run() {
             verify_ssh_setup,
             collect_server,
             collect_disk_usage,
+            get_disk_scan,
             list_latest_snapshots,
             get_interaction_log_summary,
             get_history,

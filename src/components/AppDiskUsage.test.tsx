@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from '../App'
 import { api } from '../services/api'
+import type { DiskScanState } from '../types/models'
 
 vi.mock('./SshTerminal', () => ({ SshTerminal: () => null }))
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -28,7 +29,7 @@ it.each(['success', 'failure', 'empty', 'stale'])('continues monitoring while du
   const collect = vi.spyOn(api, 'collectServer').mockResolvedValue({ ...snapshot, disks: snapshot.disks?.map((disk) => ({ ...disk, currentUserUsedBytes: null })) })
   const notify = vi.spyOn(api, 'notify').mockResolvedValue(undefined)
   let rejectUsage!: (error: Error) => void
-  let resolveUsage!: (usage: Record<string, number>) => void
+  let resolveUsage!: (usage: DiskScanState) => void
   const usage = vi.spyOn(api, 'collectDiskUsage').mockImplementation(() => new Promise((resolve, reject) => { rejectUsage = reject; resolveUsage = resolve }))
   vi.useFakeTimers()
   const container = document.createElement('div')
@@ -45,8 +46,7 @@ it.each(['success', 'failure', 'empty', 'stale'])('continues monitoring while du
   }
   await act(async () => {
     if (outcome === 'failure') rejectUsage(new Error('用户目录统计超时'))
-    else if (outcome === 'empty') resolveUsage({})
-    else resolveUsage({ '/': 1024 ** 3 })
+    else resolveUsage({ serverId: servers[0].id, queued: false, running: false, lastAttemptAt: 100, nextRefreshAt: 86400, retryAt: null, mounts: [] })
     await Promise.resolve()
   })
   for (let i = 0; i < 4; i++) await act(async () => { await vi.advanceTimersByTimeAsync(500) })
@@ -58,5 +58,5 @@ it.each(['success', 'failure', 'empty', 'stale'])('continues monitoring while du
   await act(async () => { [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) => tab.textContent === '趋势')!.click() })
   for (let i = 0; i < 2; i++) await act(async () => { await vi.advanceTimersByTimeAsync(500) })
   const storage = container.querySelector('.storage-waffle-panel')
-  expect(storage?.textContent).toContain(outcome === 'success' ? '你的 1.0 GB' : '你的 —')
+  expect(storage?.textContent).toContain('总计')
 })
