@@ -3,7 +3,7 @@
 /CONTRIBUTING.md @Tongzh-SEU
 /.github/ @Tongzh-SEU
 /scripts/contribution-policy.cjs @Tongzh-SEU
-/scripts/contribution-policy.test.cjs @Tongzh-SEU
+/scripts/contribution-policy-checks.cjs @Tongzh-SEU
 /package.json @Tongzh-SEU
 /src-tauri/Cargo.toml @Tongzh-SEU
 /src-tauri/tauri*.conf.json @Tongzh-SEU
