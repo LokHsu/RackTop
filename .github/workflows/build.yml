@@ -93,7 +93,7 @@ jobs:
             src-tauri/target/release/bundle/SHA256SUMS
 
   macos:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_macos)
+    if: github.event_name != 'workflow_dispatch' || inputs.build_macos
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -114,6 +114,7 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Import Apple Developer ID certificate
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -164,7 +165,15 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
           echo "RACKTOP_MARK_UNSIGNED=0" >> "$GITHUB_ENV"
 
+      - name: Build and verify macOS review DMG
+        if: github.event_name == 'pull_request'
+        env:
+          RACKTOP_MACOS_TARGET: aarch64-apple-darwin
+          RACKTOP_MARK_UNSIGNED: "1"
+        run: npm run bundle:macos
+
       - name: Build, sign, notarize, and verify macOS DMG
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -186,6 +195,7 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.signing.txt
 
       - name: Upload verified macOS updater package
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: RackTop_${{ env.RACKTOP_VERSION }}_macos-arm64-updater
@@ -195,7 +205,7 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
 
   windows:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_windows)
+    if: github.event_name != 'workflow_dispatch' || inputs.build_windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -214,7 +224,15 @@ jobs:
           "RACKTOP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - run: npm run test
       - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build Windows review installers
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $configPath = Join-Path $env:RUNNER_TEMP 'racktop-review.json'
+          '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $configPath -Encoding utf8
+          npm run tauri -- build --target x86_64-pc-windows-msvc --bundles msi,nsis --config $configPath
       - uses: tauri-apps/tauri-action@v1
+        if: github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
