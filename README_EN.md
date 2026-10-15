@@ -35,17 +35,17 @@ Find the right GPU before launching a job, monitor resources and processes while
 
 ## Download
 
-Current stable release: **v1.25.6**
+Current stable release: **v1.26.0**
 
 | Platform | Installer | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | `RackTop_1.25.6_macos-arm64.dmg` | [Download for macOS](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.25.6/RackTop_1.25.6_macos-arm64.dmg) |
-| Windows x64 | `RackTop_1.25.6_x64-setup.exe` | [Download for Windows](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.25.6/RackTop_1.25.6_x64-setup.exe) |
+| macOS Apple Silicon | `RackTop_1.26.0_macos-arm64.dmg` | [Download for macOS](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_macos-arm64.dmg) |
+| Windows x64 | `RackTop_1.26.0_x64-setup.exe` | [Download for Windows](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_x64-setup.exe) |
+| Linux Ubuntu/Debian x64 | `RackTop_1.26.0_amd64.deb` (recommended, about 9.2 MB) | [Download for Linux](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_amd64.deb) |
 
 See [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases) for additional versions.
 
-The 1.26.0 source adds Linux (Ubuntu x64) desktop support with DEB and AppImage builds.
-This is a source-only update; Linux installers have not yet been published as a stable release.
+The smaller DEB installer is recommended for Linux. A portable AppImage is also available on the Releases page above.
 
 If macOS blocks the app the first time you open it, go to **System Settings → Privacy & Security** and allow the app to open.
 
