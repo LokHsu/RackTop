@@ -9,6 +9,7 @@ it.skipIf(process.platform === 'win32').each([0, 2, 5])('handles %s busy unmount
     attempts=0
     sleeps=0
     sleep() { sleeps=$((sleeps + 1)); }
+    mount() { printf '/dev/disk4 on /Volumes/test dmg (hfs, local)\\n'; }
     failures="$2"
     hdiutil() {
       [ "$#" -eq 2 ] && [ "$1" = detach ] && [ "$2" = '/Volumes/test dmg' ] || exit 99
@@ -23,4 +24,12 @@ it.skipIf(process.platform === 'win32').each([0, 2, 5])('handles %s busy unmount
   expect(result.status).toBe(failures === 5 ? 1 : 0)
   expect(result.stdout).toBe(failures === 5 ? '1 5 4' : `0 ${failures + 1} ${failures}`)
   if (failures === 5) expect(result.stderr).toContain('Could not detach DMG after 5 attempts')
+})
+
+
+it.skipIf(process.platform === 'win32')('checks disappeared mounts and unreadable mount state', () => {
+  const result = spawnSync('bash', [resolve('scripts/macos-dmg.test.sh')], { encoding: 'utf8' })
+  expect(result.status).toBe(0)
+  expect(result.stdout).toContain('PASS: gone')
+  expect(result.stdout).toContain('PASS: unknown')
 })
