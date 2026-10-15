@@ -42,13 +42,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libdbus-1-dev openssh-client xterm gnome-keyring xvfb
       - run: npm ci
+      - run: npm run test
       - name: Read package version
         run: echo "RACKTOP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - name: Build signed Linux release packages
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run bundle:linux
+      - name: Smoke-test packaged application
+        run: |
+          set -euo pipefail
+          DEB_PATH=$(find src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)
+          test -n "$DEB_PATH"
+          dpkg-deb --info "$DEB_PATH"
+          dpkg-deb --extract "$DEB_PATH" "$RUNNER_TEMP/racktop-deb"
+          APP_PATH="$RUNNER_TEMP/racktop-deb/usr/bin/racktop"
+          test -x "$APP_PATH"
+          APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' -type f -print -quit)
+          test -n "$APPIMAGE_PATH"
+          APPIMAGE_PATH=$(realpath "$APPIMAGE_PATH")
+          test -s "$APPIMAGE_PATH.sig"
+          xvfb-run -a dbus-run-session -- bash scripts/smoke-linux.sh "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/racktop-appimage"
+          (cd "$RUNNER_TEMP/racktop-appimage" && "$APPIMAGE_PATH" --appimage-extract)
+          xvfb-run -a dbus-run-session -- bash scripts/smoke-linux.sh "$RUNNER_TEMP/racktop-appimage/squashfs-root/AppRun"
       - name: Record package checksums
         run: sha256sum src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/appimage/*.AppImage > src-tauri/target/release/bundle/SHA256SUMS
       - uses: actions/upload-artifact@v4
@@ -80,12 +99,14 @@ jobs:
         with:
           targets: aarch64-apple-darwin
       - run: npm ci
+      - run: npm run test
       - name: Read package version
         shell: bash
         run: |
           RACKTOP_VERSION="$(node -p "require('./package.json').version")"
           echo "RACKTOP_VERSION=$RACKTOP_VERSION" >> "$GITHUB_ENV"
 
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Import Apple Developer ID certificate
         shell: bash
         env:
@@ -180,11 +201,13 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
       - run: npm ci
+      - run: npm run test
       - name: Read package version
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
           "RACKTOP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -193,6 +216,53 @@ jobs:
         with:
           args: --target x86_64-pc-windows-msvc --bundles msi,nsis
           uploadWorkflowArtifacts: false
+      - name: Smoke-test Windows installers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi' -Filter '*.msi' | Select-Object -First 1
+          $nsis = Get-ChildItem 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis' -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $msi) { throw 'Windows build did not produce an MSI installer.' }
+          if (-not $nsis) { throw 'Windows build did not produce an NSIS setup executable.' }
+
+          $msiExtract = Join-Path $env:RUNNER_TEMP 'racktop-msi-extract'
+          $msiArgs = "/a `"$($msi.FullName)`" /qn /norestart TARGETDIR=`"$msiExtract`""
+          $msiProcess = Start-Process msiexec.exe -ArgumentList $msiArgs -Wait -PassThru
+          if ($msiProcess.ExitCode -ne 0) { throw "MSI administrative install failed with exit code $($msiProcess.ExitCode)." }
+          if (-not (Get-ChildItem $msiExtract -Recurse -Filter 'RackTop.exe' -ErrorAction SilentlyContinue)) {
+            throw 'MSI did not contain RackTop.exe.'
+          }
+
+          $nsisInstall = Join-Path $env:RUNNER_TEMP 'racktop-nsis-install'
+          $nsisProcess = Start-Process $nsis.FullName -ArgumentList "/S /D=$nsisInstall" -Wait -PassThru
+          if ($nsisProcess.ExitCode -ne 0) { throw "NSIS installation failed with exit code $($nsisProcess.ExitCode)." }
+          $app = Get-ChildItem $nsisInstall -Recurse -Filter 'RackTop.exe' | Select-Object -First 1
+          if (-not $app) { throw 'NSIS installation did not create RackTop.exe.' }
+
+          $appProcess = Start-Process $app.FullName -PassThru
+          Start-Sleep -Seconds 5
+          if ($appProcess.HasExited) { throw "Installed RackTop exited early with code $($appProcess.ExitCode)." }
+          for ($attempt = 0; $attempt -lt 2; $attempt++) {
+            $duplicate = Start-Process $app.FullName -PassThru
+            if (-not $duplicate.WaitForExit(10000)) {
+              Stop-Process -Id $duplicate.Id -Force
+              throw 'Duplicate RackTop launch did not exit within 10 seconds.'
+            }
+            if ($duplicate.ExitCode -ne 0) { throw "Duplicate launch failed with exit code $($duplicate.ExitCode)." }
+            $appProcess.Refresh()
+            if ($appProcess.HasExited) { throw 'Original RackTop exited during duplicate launch.' }
+            $instances = @(Get-Process | Where-Object { $_.Path -eq $app.FullName })
+            if ($instances.Count -ne 1 -or $instances[0].Id -ne $appProcess.Id) {
+              throw 'Repeated launch did not preserve exactly one original RackTop process.'
+            }
+          }
+          Stop-Process -Id $appProcess.Id -Force
+
+          $uninstaller = Get-ChildItem $nsisInstall -Recurse -Filter 'uninstall.exe' | Select-Object -First 1
+          if (-not $uninstaller) { throw 'NSIS installation did not create an uninstaller.' }
+          $uninstallProcess = Start-Process $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstallProcess.ExitCode -ne 0) { throw "NSIS uninstall failed with exit code $($uninstallProcess.ExitCode)." }
+
       - name: Upload Windows setup package
         uses: actions/upload-artifact@v4
         with:
