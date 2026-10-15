@@ -18,23 +18,18 @@ on:
         required: true
         type: boolean
         default: true
-  pull_request:
-  push:
-    branches:
-      - develop
-    tags:
-      - "v*"
+
+concurrency:
+  group: racktop-build-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
-env:
-  REVIEW_BUILD: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
-
 jobs:
   linux:
     runs-on: ubuntu-22.04
-    if: github.event_name != 'workflow_dispatch' || inputs.build_linux
+    if: inputs.build_linux
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,15 +42,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libdbus-1-dev openssh-client xterm gnome-keyring xvfb
       - run: npm ci
+      - run: npm run test
       - name: Read package version
         run: echo "RACKTOP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
-      - run: npm run test
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - name: Build Linux review packages
-        if: env.REVIEW_BUILD == 'true'
-        run: npm run bundle:linux -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Build signed Linux release packages
-        if: env.REVIEW_BUILD != 'true'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -72,9 +63,7 @@ jobs:
           APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' -type f -print -quit)
           test -n "$APPIMAGE_PATH"
           APPIMAGE_PATH=$(realpath "$APPIMAGE_PATH")
-          if [ "$REVIEW_BUILD" != 'true' ]; then
-            test -s "$APPIMAGE_PATH.sig"
-          fi
+          test -s "$APPIMAGE_PATH.sig"
           xvfb-run -a dbus-run-session -- bash scripts/smoke-linux.sh "$APP_PATH"
           mkdir -p "$RUNNER_TEMP/racktop-appimage"
           (cd "$RUNNER_TEMP/racktop-appimage" && "$APPIMAGE_PATH" --appimage-extract)
@@ -98,7 +87,7 @@ jobs:
             src-tauri/target/release/bundle/SHA256SUMS
 
   macos:
-    if: github.event_name != 'workflow_dispatch' || inputs.build_macos
+    if: inputs.build_macos
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -110,16 +99,15 @@ jobs:
         with:
           targets: aarch64-apple-darwin
       - run: npm ci
+      - run: npm run test
       - name: Read package version
         shell: bash
         run: |
           RACKTOP_VERSION="$(node -p "require('./package.json').version")"
           echo "RACKTOP_VERSION=$RACKTOP_VERSION" >> "$GITHUB_ENV"
-      - run: npm run test
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Import Apple Developer ID certificate
-        if: env.REVIEW_BUILD != 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -170,15 +158,7 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
           echo "RACKTOP_MARK_UNSIGNED=0" >> "$GITHUB_ENV"
 
-      - name: Build and verify macOS review DMG
-        if: env.REVIEW_BUILD == 'true'
-        env:
-          RACKTOP_MACOS_TARGET: aarch64-apple-darwin
-          RACKTOP_MARK_UNSIGNED: "1"
-        run: npm run bundle:macos
-
       - name: Build, sign, notarize, and verify macOS DMG
-        if: env.REVIEW_BUILD != 'true'
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -189,7 +169,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run bundle:macos
 
-      - name: Upload verified macOS DMG
+      - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
           name: RackTop_${{ env.RACKTOP_VERSION }}_macos-arm64-dmg
@@ -199,8 +179,7 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.sha256
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.signing.txt
 
-      - name: Upload verified macOS updater package
-        if: env.REVIEW_BUILD != 'true'
+      - name: Upload macOS updater package
         uses: actions/upload-artifact@v4
         with:
           name: RackTop_${{ env.RACKTOP_VERSION }}_macos-arm64-updater
@@ -210,7 +189,7 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
 
   windows:
-    if: github.event_name != 'workflow_dispatch' || inputs.build_windows
+    if: inputs.build_windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -222,22 +201,14 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
       - run: npm ci
+      - run: npm run test
       - name: Read package version
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
           "RACKTOP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - run: npm run test
       - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Build Windows review installers
-        if: env.REVIEW_BUILD == 'true'
-        shell: pwsh
-        run: |
-          $configPath = Join-Path $env:RUNNER_TEMP 'racktop-review.json'
-          '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $configPath -Encoding utf8
-          npm run tauri -- build --target x86_64-pc-windows-msvc --bundles msi,nsis --config $configPath
       - uses: tauri-apps/tauri-action@v1
-        if: env.REVIEW_BUILD != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -292,7 +263,7 @@ jobs:
           $uninstallProcess = Start-Process $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
           if ($uninstallProcess.ExitCode -ne 0) { throw "NSIS uninstall failed with exit code $($uninstallProcess.ExitCode)." }
 
-      - name: Upload verified Windows setup package
+      - name: Upload Windows setup package
         uses: actions/upload-artifact@v4
         with:
           name: RackTop_${{ env.RACKTOP_VERSION }}_x64-setup
@@ -301,9 +272,37 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
 
-      - name: Upload verified Windows MSI package
+      - name: Upload Windows MSI package
         uses: actions/upload-artifact@v4
         with:
           name: RackTop_${{ env.RACKTOP_VERSION }}_x64_zh-CN-msi
           if-no-files-found: error
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+
+  build-source:
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record build source
+        env:
+          SOURCE_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, subprocess
+          from pathlib import Path
+          git = lambda ref: subprocess.check_output(['git', 'rev-parse', ref], text=True).strip()
+          Path('build-source.json').write_text(json.dumps({
+              'commit': git('HEAD'), 'tree': git('HEAD^{tree}'),
+              'version': json.loads(Path('package.json').read_text())['version'],
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'source_repository': os.environ['SOURCE_REPOSITORY'],
+              'complete': True,
+              'run_id': os.environ['GITHUB_RUN_ID'],
+          }, indent=2))
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RackTop_build-source
+          path: build-source.json
+          if-no-files-found: error

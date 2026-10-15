@@ -399,10 +399,14 @@ Release 发布不得夹带或修改工作区中的无关内容。创建标签和
 
 RackTop 的 macOS、Windows、Linux 安装包和自动更新附件统一由 `.github/workflows/build.yml` 构建。开发 Agent 修改构建或发布流程时必须同步维护该工作流，不得只在本机执行一套无法由 GitHub Actions 复现的临时命令。
 
-- 推送 `v*` 标签时必须构建 macOS Apple Silicon、Windows x64 和 Linux Ubuntu x64 三个平台；通过 `workflow_dispatch` 手动触发时，可使用 `build_macos`、`build_windows` 和 `build_linux` 选择平台。
-- macOS job 必须运行前端与 Rust 测试，完成 App 签名、可选公证、DMG 校验，并生成 updater 使用的 `.app.tar.gz` 与 `.sig`。
-- Windows job 必须运行前端与 Rust 测试，构建 NSIS `*-setup.exe` 与中文 MSI，随后完成 MSI 解包检查、NSIS 静默安装、App 启动和静默卸载；只有烟雾测试通过后才能上传 Artifact。
-- Linux job 必须在 Ubuntu 22.04 运行前端与 Rust 测试，构建 DEB 与 AppImage，检查包内容并验证启动、数据库创建和单实例行为；正式构建生成 AppImage updater 签名，PR 审核构建不使用生产签名密钥。
+- 安装包构建只允许 `workflow_dispatch` 手动启动；PR、分支推送、合并以及 `v*` 标签均不触发编译。不主动为合并或发布重复启动构建。
+- 手动构建默认选择 macOS、Windows、Linux 三个平台，生成六种完整发布附件及 updater 签名；也可用 `build_macos`、`build_windows` 和 `build_linux` 单独选择平台。手动构建一次完成前端测试、Rust 测试、编译、打包、安装包验证及更新签名；测试失败不得作为正式发布产物上传。
+- main/develop 的分支保护不再强制要求 macos/windows/linux 构建状态，保留轻量贡献规则检查；构建成功与合并权限分别管理。
+- 发布 Release 时复用已有成功手动构建的原始产物；先核对内部 `RackTop_build-source` 记录的 Git tree、版本与正式 main/tag 完全一致，六个附件及 updater 签名齐全且未过期，并核对文件校验值。没有匹配产物时明确告知需要手动构建，不自动重新编译。
+- 全三平台成功构建保存内部 `RackTop_build-source` Artifact，记录 checkout 提交、Git tree、版本及 run id；它不是 Release 附件。部分平台构建不生成完整来源记录，不能冒充完整发布构建。生成产物不代表公开发布 Release。
+- macOS job 运行前端与 Rust 测试，再沿用 1.25.6 的临时签名、非公证打包方式，完成 DMG 校验，并生成 updater 使用的 `.app.tar.gz` 与 `.sig`。
+- Windows job 运行前端与 Rust 测试，构建 NSIS `*-setup.exe` 与中文 MSI，完成 MSI 解包、NSIS 安装、App 启动及卸载烟雾测试，并生成 NSIS updater 签名。
+- Linux job 在 Ubuntu 22.04 运行前端与 Rust 测试，构建 DEB、AppImage 及更新签名，并验证包内容、启动、数据库创建及单实例行为。
 - 每次正式构建必须生成 6 个发布文件，并分别上传为 6 个独立 Artifact 容器：macOS DMG、macOS `.app.tar.gz`、Windows NSIS `setup.exe`、Windows MSI、Linux DEB 和 Linux AppImage。macOS DMG 与 `.app.tar.gz` 不得合并到同一个 Artifact；`.sig` 是生成 updater 清单所需的内部签名文件，可跟随对应 updater 容器，但不计入 6 个 Release 发布文件。
 - GitHub Actions Artifact 是 ZIP 下载容器，容器名不是安装包文件名。容器名必须包含真实版本、平台和包类型，例如 `RackTop_X.Y.Z_x64-setup`；容器内必须保留真实文件名 `RackTop_X.Y.Z_x64-setup.exe`，不得只使用 `nsis`、`windows` 等无法直接判断安装方式的名称。
 - Windows 用户优先验证和下载 `x64-setup` Artifact；`x64_zh-CN-msi` 用于 MSI 部署验证。不得把 MSI 描述为 setup.exe，也不得把 Artifact ZIP 本身描述为安装程序。
