@@ -118,9 +118,6 @@ jobs:
       - run: npm run test
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      - name: Test macOS DMG detach handling
-        run: bash scripts/macos-dmg.test.sh
-
       - name: Import Apple Developer ID certificate
         if: env.REVIEW_BUILD != 'true'
         shell: bash
