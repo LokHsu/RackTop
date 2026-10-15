@@ -40,16 +40,10 @@ if [ "$1" = --mount ]; then
       printf 'duplicate\n'
       exit 0
     fi
-    # An empty mount has no user directory to match, but that means zero
-    # ownership rather than an unrecognized directory. Keep non-empty mounts
-    # unknown so permission or naming problems are not reported as zero.
-    if entries=$(find "$mount" -mindepth 1 -maxdepth 1 -print -quit 2>"$errors"); then
-      [ -z "$entries" ] || { printf 'unrecognized\n'; exit 0; }
-      user_kb=0
-    else
-      failure
-      exit 0
-    fi
+    # A missing user directory means this user owns no files on the mount.
+    # It is a valid zero result; failures from the actual scan still use the
+    # explicit failure/permission states below.
+    user_kb=0
   elif usage=$(du -skx -- "$@" 2>"$errors"); then
     user_kb=$(printf '%s\n' "$usage" | awk '$1 !~ /^[0-9]+$/ {invalid=1} {sum += $1} END {if (invalid || NR == 0) exit 1; printf "%.0f", sum}') || { printf 'failed\n'; exit 0; }
   else
