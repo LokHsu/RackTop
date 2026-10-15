@@ -6,6 +6,9 @@ import { clampPercent, gpuMemoryPercent, hasOtherUserGpuWorkload } from '../util
 import { normalizeIdleFilters } from '../utils/idleFilters'
 import { RACKTOP_MANAGED_IDENTITY_PATH } from '../utils/sshSetup'
 import type { ReleaseInfo } from '../utils/updateCheck'
+import type { DiskScanState } from '../types/models'
+
+const demoDiskScans = new Map<string, DiskScanState>()
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -390,9 +393,25 @@ export const api = {
     browserInteractionSummary.servers = browserInteractionSummary.servers.map((item) => item.serverId === serverId ? { ...item, lastFinishedAt: Date.now(), responseBytes: item.responseBytes + responseBytes, storedBytes: item.storedBytes + storedBytes, status: 'success' } : item)
     return snapshot
   },
-  async collectDiskUsage(serverId: string, mounts: string[]): Promise<Record<string, number>> {
-    if (isTauri) return invoke('collect_disk_usage', { serverId, mounts })
-    return Object.fromEntries((browserSnapshotFor(serverId).disks ?? []).filter((disk) => mounts.includes(disk.mountPoint) && disk.currentUserUsedBytes != null).map((disk) => [disk.mountPoint, disk.currentUserUsedBytes!]))
+  async collectDiskUsage(serverId: string, mounts: string[], force = false): Promise<DiskScanState> {
+    if (isTauri) return invoke('collect_disk_usage', { serverId, mounts, force })
+    const now = Math.floor(Date.now() / 1000)
+    const previous = demoDiskScans.get(serverId)
+    if (previous && (previous.running || (!force && now < previous.nextRefreshAt))) return structuredClone(previous)
+    const state: DiskScanState = { serverId, queued: false, running: true, lastAttemptAt: now, nextRefreshAt: now + 86400, retryAt: null, mounts: mounts.map((mountPoint) => ({ mountPoint, status: 'pending', result: previous?.mounts.find((item) => item.mountPoint === mountPoint)?.result ?? null, collectedAt: previous?.mounts.find((item) => item.mountPoint === mountPoint)?.collectedAt ?? null })) }
+    demoDiskScans.set(serverId, state)
+    state.mounts.forEach((mount, index) => window.setTimeout(() => {
+      mount.result = browserSnapshotFor(serverId).disks?.find((disk) => disk.mountPoint === mount.mountPoint) ?? null
+      mount.status = mount.result ? 'success' : 'unrecognized'
+      mount.collectedAt = mount.result ? Math.floor(Date.now() / 1000) : null
+      if (index === state.mounts.length - 1) state.running = false
+    }, 1200 * (index + 1)))
+    if (!state.mounts.length) state.running = false
+    return structuredClone(state)
+  },
+  async getDiskScan(serverId: string): Promise<DiskScanState | null> {
+    if (isTauri) return invoke('get_disk_scan', { serverId })
+    return structuredClone(demoDiskScans.get(serverId) ?? null)
   },
   async getInteractionLogSummary(): Promise<InteractionLogSummary> {
     return isTauri ? invoke('get_interaction_log_summary') : { ...browserInteractionSummary, servers: browserInteractionSummary.servers.map((item) => ({ ...item })) }

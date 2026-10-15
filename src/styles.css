@@ -524,6 +524,12 @@ button.gpu-card:active { transform: scale(.99); }
 .history-page__header h2 { margin: 0; font-size: calc(14px + var(--font-adjust, 0px)); }
 .history-page__header p { margin: 0; color: var(--text-tertiary); font-size: calc(10px + var(--font-adjust, 0px)); }
 .history-page__header > small { flex: 0 0 auto; color: var(--text-tertiary); font-size: calc(10px + var(--font-adjust, 0px)); }
+.storage-section__header { flex-wrap: wrap; }
+.history-page__header > .storage-scan-controls { margin-left: auto; gap: 10px; flex-shrink: 0; max-width: 100%; }
+.storage-scan-meta { display: grid; gap: 3px; text-align: right; min-width: 0; }
+.storage-scan-meta small { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--text-tertiary); font-size: calc(10px + var(--font-adjust, 0px)); overflow-wrap: anywhere; }
+.storage-scan-meta .storage-scan-reason { color: var(--orange); }
+.storage-scan-controls .icon-button { width: 28px; height: 28px; flex: 0 0 28px; }
 .history-page__state { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 180px; color: var(--text-tertiary); font-size: calc(11px + var(--font-adjust, 0px)); }
 .history-page__state--error { color: var(--red); }
 .history-heatmap-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
