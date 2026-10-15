@@ -112,8 +112,6 @@ const browserPreviewState = api.isDesktop || typeof window === 'undefined' ? nul
 const releaseUrl = (version: string) => `https://github.com/Tongzh-SEU/RackTop/releases/tag/v${version.replace(/^v/i, '')}`
 
 const ONBOARDING_DISMISSED_KEY = 'racktop.onboardingDismissed.v1'
-// Horizontal space the card page leaves inside its scrolling container, matching
-// `.detail-page { width: min(..., calc(100% - 52px)) }` in styles.css.
 const CARD_PAGE_HORIZONTAL_INSET = 52
 
 const tabs: Array<{ value: DetailTab; label: string }> = [
@@ -1003,20 +1001,23 @@ function App() {
     // Freeze the original two-column width at the initial, unscaled window size.
     // At or below 100%, resizing changes the column count, not the base width.
     // Above 100%, CSS uses the stable release's flexible card widths instead.
-    //
-    // The card page is `calc(100% - 52px)` of the scrolling container, and that container
-    // owns the scrollbar, so the width CSS actually hands the page is its client box —
-    // read here, before the saved zoom is applied. Measuring the workspace instead
-    // overcounted by that scrollbar and left the row a few pixels short of two cards.
-    const cardScroller = root.querySelector<HTMLElement>('.workspace__scroll')
-    const cardPageWidth = cardScroller ? Math.max(0, cardScroller.clientWidth - CARD_PAGE_HORIZONTAL_INSET) : 0
-    const cardWidth = Math.max(1, (Math.min(1180, cardPageWidth) - 12) / 2)
+    const sidebarWidth = Math.min(248, Math.max(220, window.innerWidth * 0.16))
+    const originalContentWidth = Math.min(1180, window.innerWidth - sidebarWidth - CARD_PAGE_HORIZONTAL_INSET)
+    const cardWidth = Math.max(1, (originalContentWidth - 12) / 2)
     root.style.setProperty('--card-base-width', `${cardWidth}px`)
     let zoom = Math.min(2, Math.max(0.5, Math.round((Number(localStorage.getItem('racktop.uiZoom') ?? '1') || 1) * 20) / 20))
     let maxCardsPerRow = 3
+    const cardScroller = root.querySelector<HTMLElement>('.workspace__scroll')
     const fitCardPage = () => {
       if (!cardScroller) return
-      const availableWidth = Math.max(0, cardScroller.clientWidth - CARD_PAGE_HORIZONTAL_INSET)
+      // Take scrollbar space out of the page margins, not the frozen card width.
+      // Overlay scrollbars need no compensation; enlarged layouts keep their margins.
+      const scrollbarWidth = Math.max(0, cardScroller.offsetWidth - cardScroller.clientWidth)
+      const pageInset = zoom > 1 ? CARD_PAGE_HORIZONTAL_INSET : Math.max(0, CARD_PAGE_HORIZONTAL_INSET - scrollbarWidth)
+      root.style.setProperty('--card-page-inset', `${pageInset}px`)
+      // Keep the same page center when switching to the scrollbar-free terminal.
+      root.style.setProperty('--card-page-offset', `${zoom > 1 ? 0 : (CARD_PAGE_HORIZONTAL_INSET - pageInset) / 2}px`)
+      const availableWidth = Math.max(0, cardScroller.clientWidth - pageInset)
       const columns = Math.max(1, Math.min(maxCardsPerRow, Math.floor((availableWidth + 12) / (cardWidth + 12))))
       root.style.setProperty('--card-page-width', `${zoom > 1 ? 1180 : columns * cardWidth + (columns - 1) * 12}px`)
     }
@@ -1047,7 +1048,7 @@ function App() {
       else if (event.key === '0') { event.preventDefault(); zoom = 1; applyZoom() }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-base-width'); root.style.removeProperty('--max-card-columns'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {}; cardLayoutRefreshRef.current = () => {} }
+    return () => { cardLayoutObserver.disconnect(); window.removeEventListener('keydown', onKeyDown); root.style.removeProperty('--ui-zoom'); root.style.removeProperty('--ui-zoom-inverse'); root.style.removeProperty('--card-page-width'); root.style.removeProperty('--card-page-inset'); root.style.removeProperty('--card-page-offset'); root.style.removeProperty('--card-base-width'); root.style.removeProperty('--max-card-columns'); delete root.dataset.zoomLayout; zoomAdjustRef.current = () => {}; cardLayoutRefreshRef.current = () => {} }
   }, [])
 
   useEffect(() => {
