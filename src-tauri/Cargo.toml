@@ -50,6 +50,9 @@ tauri-plugin-single-instance = "2"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gio = "0.18"
+hyper-util = { version = "0.1", features = ["client-proxy"] }
+reqwest = { version = "0.13", default-features = false }
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 tauri-plugin-single-instance = "2"
 
