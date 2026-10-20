@@ -92,4 +92,60 @@ describe('ProcessBlocks', () => {
     expect(container.querySelector('.process-inline-inspector')).toBeNull()
     await act(async () => root.unmount())
   })
+  it('expands all processes, preserves keyboard focus, and collapses to five rows', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const many = { ...snapshot, processes: Array.from({ length: 37 }, (_, i) => ({ ...snapshot.processes[0], pid: 30000 + i })) }
+    try {
+      await act(async () => root.render(<ProcessBlocks snapshot={many} compact />))
+      const region = container.querySelector<HTMLElement>('[aria-label="GPU 进程列表"]')!
+      const button = region.querySelector<HTMLButtonElement>('.process-list-more')!
+      expect(region.querySelectorAll('tbody tr')).toHaveLength(5)
+      expect(button.getAttribute('aria-expanded')).toBe('false')
+      button.focus()
+      await act(async () => button.click())
+      expect(region.querySelectorAll('tbody tr')).toHaveLength(37)
+      expect(button.getAttribute('aria-expanded')).toBe('true')
+      expect(button.textContent).toBe('收起')
+      expect(document.activeElement).toBe(button)
+      await act(async () => button.click())
+      expect(region.querySelectorAll('tbody tr')).toHaveLength(5)
+      expect(document.activeElement).toBe(button)
+    } finally { await act(async () => root.unmount()); container.remove() }
+  })
+
+  it('remembers each server list across page remounts without expanding other pages', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const many = { ...snapshot,
+      processes: Array.from({ length: 37 }, (_, i) => ({ ...snapshot.processes[0], pid: 30000 + i })),
+      cpuProcesses: Array.from({ length: 24 }, (_, i) => ({ ...snapshot.cpuProcesses[0], pid: 40000 + i })),
+    }
+    const rows = (kind: string) => container.querySelectorAll(`.process-table--${kind} tbody tr`).length
+    try {
+      await act(async () => root.render(<ProcessBlocks snapshot={many} compact />))
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="GPU 进程列表：展开全部"]')!.click())
+      expect(rows('gpu')).toBe(37)
+      expect(rows('cpu')).toBe(5)
+      await act(async () => root.render(<div>其他页面</div>))
+      await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, serverId: 'server-2' }} compact />))
+      expect(rows('gpu')).toBe(5)
+      expect(rows('cpu')).toBe(5)
+      await act(async () => root.render(<ProcessBlocks snapshot={many} compact />))
+      expect(rows('gpu')).toBe(37)
+      expect(rows('cpu')).toBe(5)
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="CPU 进程列表：展开全部"]')!.click())
+      expect(rows('cpu')).toBe(24)
+      await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, processes: many.processes.slice(0, 3) }} compact />))
+      expect(rows('gpu')).toBe(3)
+      expect(container.querySelector('[aria-label="GPU 进程列表"] .process-list-more')).toBeNull()
+      await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, timestamp: 2 }} compact />))
+      expect(rows('gpu')).toBe(37)
+      // Restore session preferences for other tests.
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="GPU 进程列表：收起"]')!.click())
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="CPU 进程列表：收起"]')!.click())
+    } finally { await act(async () => root.unmount()) }
+  })
+
 })

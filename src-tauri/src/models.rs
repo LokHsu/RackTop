@@ -317,6 +317,8 @@ pub struct SystemMetric {
     pub cpu_model: String,
     pub cpu_utilization: f64,
     pub current_user_cpu_utilization: f64,
+    #[serde(default)]
+    pub current_user_memory_used_bytes: Option<u64>,
     pub load1: f64,
     pub load5: f64,
     pub load15: f64,

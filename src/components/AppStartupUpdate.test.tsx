@@ -49,8 +49,8 @@ describe('App startup update check', () => {
     saveCachedUpdate({ lastCheckedAt: now, lastScheduledCheckAt, release: undefined })
     const setTimeout = vi.spyOn(window, 'setTimeout')
     const getLatestRelease = vi.spyOn(api, 'getLatestRelease').mockResolvedValue({
-      version: '1.25.4',
-      url: 'https://github.com/Tongzh-SEU/RackTop/releases/tag/v1.25.4',
+      version: packageInfo.version,
+      url: `https://github.com/Tongzh-SEU/RackTop/releases/tag/v${packageInfo.version}`,
     })
     const container = document.createElement('div')
     document.body.append(container)
@@ -77,8 +77,8 @@ describe('App startup update check', () => {
 
   it('opens the current release notes from the About update row', async () => {
     vi.spyOn(api, 'getLatestRelease').mockResolvedValue({
-      version: '1.25.4',
-      url: 'https://github.com/Tongzh-SEU/RackTop/releases/tag/v1.25.4',
+      version: packageInfo.version,
+      url: `https://github.com/Tongzh-SEU/RackTop/releases/tag/v${packageInfo.version}`,
     })
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const container = document.createElement('div')

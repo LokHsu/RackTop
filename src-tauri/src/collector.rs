@@ -68,6 +68,7 @@ if [ "${RACKTOP_INCLUDE_DISKS:-1}" = "1" ]; then
   done | head -n 16;
 fi;
 printf '__RACKTOP_USERCPU__\n'; ps -u "$(id -un)" -o pcpu= 2>/dev/null | awk -v n="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf 1)" '{s+=$1} END {printf "%.2f\n", (n>0?s/n:s+0)}';
+printf '__RACKTOP_USERMEM__\n'; if user_rss=$(ps -u "$(id -u)" -o rss= 2>/dev/null); then printf '%s\n' "$user_rss" | awk '{s+=$1} END {printf "%.0f\n", s*1024}'; fi;
 racktop_probe_npu;
 printf '__RACKTOP_ACCELERATOR__\n';
 if [ "$racktop_npu_status" -eq 0 ]; then racktop_accelerator=ascend; elif command -v nvidia-smi >/dev/null 2>&1; then racktop_accelerator=nvidia; elif command -v ppu-smi >/dev/null 2>&1; then racktop_accelerator=ppu; elif command -v npu-smi >/dev/null 2>&1; then racktop_accelerator=ascend; else racktop_accelerator=nvidia; fi;
@@ -429,6 +430,7 @@ pub fn parse_snapshot(server_id: &str, output: &str) -> Result<Snapshot, String>
     }
     if let Some(memory) = sections.get("MEM") { parse_memory(memory, &mut system); }
     system.current_user_cpu_utilization = first_line(&sections, "USERCPU").map(parse_number).unwrap_or_default();
+    system.current_user_memory_used_bytes = first_line(&sections, "USERMEM").and_then(|value| value.trim().parse::<u64>().ok());
     let disks = sections.get("DISK").map(|lines| lines.iter().filter_map(|line| parse_disk(line).ok()).collect()).unwrap_or_default();
 
     let accelerator_vendor = first_line(&sections, "ACCELERATOR").filter(|value| matches!(*value, "ascend" | "ppu")).unwrap_or("nvidia").to_string();
@@ -859,6 +861,17 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = "__RACKTOP_USER__\ntongzh\n__RACKTOP_UIDMIN__\n1000\n__RACKTOP_HOST__\ngpu-box\n__RACKTOP_OS__\nubuntu|Ubuntu 22.04 LTS\n__RACKTOP_CPUMODEL__\nAMD EPYC 9654 96-Core Processor\n__RACKTOP_CPU1__\ncpu 100 0 20 880 0 0 0\n__RACKTOP_CPU2__\ncpu 120 0 30 950 0 0 0\n__RACKTOP_LOAD__\n0.06 0.11 0.09 1/100 1\n__RACKTOP_MEM__\nMemTotal: 100000 kB\nMemAvailable: 75000 kB\nSwapTotal: 1000 kB\nSwapFree: 900 kB\n__RACKTOP_USERCPU__\n5.50\n__RACKTOP_NVIDIA__\navailable\n__RACKTOP_GPU__\n0, NVIDIA GeForce RTX 4090 D, GPU-abc, 25, 10, 2048, 24564, 48, 110.5\n__RACKTOP_GPUPROC__\nGPU-abc, 4242, python, 2048\n__RACKTOP_GPUPMON__\n# gpu pid type sm mem\n0 4242 C 73 41 - - - - 2048 0 python\n__RACKTOP_PS__\ntongzh 1000 4242 1 4242 12.5 2.0 204800 01:20 python train.py\ntongzh 1000 4343 4242 4242 1.5 1.5 2097152 00:10 python data-loader.py\ntongzh 1000 5000 1 5000 0.8 1.2 1572864 00:30 python cpu-task.py\ntongzh 1000 5500 1 5500 0.9 0.5 1048576 00:20 python small-task.py\ntongzh 1000 5800 1 5800 1.2 1.4 1468006 00:20 /usr/bin/python3 /usr/bin/nvitop\ntongzh 1000 5900 1 5900 1.1 1.5 1572864 00:20 /home/tongzh/.vscode-server/bin/node server-main.js\ntongzh 1000 6000 1 6000 0.7 1.1 1153434 10:00 /usr/lib/systemd/systemd --user\nroot 0 99 1 99 0.2 1.2 1258291 10:00 systemd-worker\n__RACKTOP_END__\n";
+
+    #[test]
+    fn parses_current_user_memory_without_using_filtered_process_rows() {
+        let with_memory = SAMPLE.replace("__RACKTOP_NVIDIA__", "__RACKTOP_USERMEM__\n20480000\n__RACKTOP_NVIDIA__");
+        assert_eq!(parse_snapshot("s", &with_memory).unwrap().system.current_user_memory_used_bytes, Some(20_480_000));
+        assert_eq!(parse_snapshot("s", SAMPLE).unwrap().system.current_user_memory_used_bytes, None);
+        for (value, expected) in [("0", Some(0)), ("", None), ("denied", None), ("-1", None)] {
+            let input = SAMPLE.replace("__RACKTOP_NVIDIA__", &format!("__RACKTOP_USERMEM__\n{value}\n__RACKTOP_NVIDIA__"));
+            assert_eq!(parse_snapshot("s", &input).unwrap().system.current_user_memory_used_bytes, expected);
+        }
+    }
 
     #[test]
     fn parses_realistic_snapshot() {

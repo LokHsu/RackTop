@@ -196,14 +196,33 @@ async function toggleWindowMaximize(event: MouseEvent<HTMLElement>) {
 }
 
 export function DesktopWindowControls({ platform = appPlatform }: { platform?: ReturnType<typeof detectAppPlatform> }) {
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => {
+    if (platform !== 'windows' || !api.isDesktop) return
+    const window = getCurrentWindow()
+    let disposed = false
+    let revision = 0
+    let unlisten: (() => void) | undefined
+    const update = async () => {
+      const current = ++revision
+      const value = await window.isMaximized()
+      if (!disposed && current === revision) setMaximized(value)
+    }
+    void window.onResized(() => { void update().catch(console.error) }).then((stop) => {
+      if (disposed) stop()
+      else { unlisten = stop; void update().catch(console.error) }
+    }).catch(console.error)
+    return () => { disposed = true; unlisten?.() }
+  }, [platform])
   if (platform !== 'windows' && platform !== 'linux') return null
+  const maximizeLabel = platform === 'windows' ? (maximized ? '还原窗口' : '最大化窗口') : '最大化或还原窗口'
   const windowAction = (command: string) => platform === 'windows'
     ? { onMouseDown: (event: MouseEvent<HTMLButtonElement>) => { event.preventDefault(); event.stopPropagation(); void invoke(command) } }
     : { onClick: () => void invoke(command) }
   return (
     <div className="window-controls" aria-label="窗口控制" onMouseDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
       <button type="button" {...windowAction('window_minimize')} aria-label="最小化窗口" title={platform === 'linux' ? '最小化窗口' : undefined}><Minus size={15} /></button>
-      <button type="button" {...windowAction('window_toggle_maximize')} aria-label="最大化或还原窗口" title={platform === 'linux' ? '最大化或还原窗口' : undefined}><Square size={12} /></button>
+      <button type="button" {...windowAction('window_toggle_maximize')} aria-label={maximizeLabel} title={maximizeLabel}>{platform === 'windows' && maximized ? <Copy size={12} /> : <Square size={12} />}</button>
       <button type="button" className="window-controls__close" {...windowAction('window_close')} aria-label="关闭窗口" title={platform === 'linux' ? '关闭窗口' : undefined}><X size={15} /></button>
     </div>
   )
@@ -2091,14 +2110,14 @@ function GpuMemoryWarningDialog({ warning, accelerator, onClose }: { warning: Gp
   )
 }
 
-function CpuOverviewCard({ snapshot, memoryPercent, onOpen }: { snapshot: Snapshot; memoryPercent: number; onOpen: () => void }) {
+export function CpuOverviewCard({ snapshot, memoryPercent, onOpen }: { snapshot: Snapshot; memoryPercent: number; onOpen: () => void }) {
   const logicalCores = snapshot.system.cpuLogicalCores
   const normalizedLoad = logicalCores ? snapshot.system.load1 / logicalCores * 100 : null
   const currentUserCpuUtilization = visibleCurrentUserCpuUtilization(snapshot)
   return (
     <button className="panel gpu-card cpu-overview-card" onClick={onOpen}>
       <PanelHeader title="CPU" subtitle={snapshot.system.cpuModel || 'CPU'} action={<ChevronRight size={16} />} />
-      <MetricBar label="系统 MEM" value={memoryPercent} detail={`${formatBytes(snapshot.system.memoryUsedBytes)} / ${formatBytes(snapshot.system.memoryTotalBytes)}`} accent="purple" />
+      <MetricBar label="系统 MEM" value={memoryPercent} detail={`${formatBytes(snapshot.system.memoryUsedBytes)} / ${formatBytes(snapshot.system.memoryTotalBytes)}`} accent="purple" currentUserValue={snapshot.system.memoryTotalBytes > 0 && (snapshot.system.currentUserMemoryUsedBytes ?? 0) >= 2 * 1024 ** 3 ? snapshot.system.currentUserMemoryUsedBytes! / snapshot.system.memoryTotalBytes * 100 : 0} currentUserDetail={snapshot.system.currentUserMemoryUsedBytes != null ? formatBytes(snapshot.system.currentUserMemoryUsedBytes) : undefined} />
       <MetricBar label="CPU UTL" value={snapshot.system.cpuUtilization} currentUserValue={currentUserCpuUtilization} currentUserDetail={`${currentUserCpuUtilization.toFixed(1)}%`} />
       <TelemetryGrid compact items={[
         snapshot.system.memoryAvailableBytes !== undefined && { label: '可用内存', value: formatBytes(snapshot.system.memoryAvailableBytes) },
@@ -2186,7 +2205,7 @@ export function GpuDetail({ snapshot, points, selectedGpuUuid, animateChart }: {
 
 function CpuDetail({ snapshot, points, animateChart }: { snapshot: Snapshot; points: HistoryPoint[]; animateChart: boolean }) {
   const memoryPercent = snapshot.system.memoryTotalBytes ? snapshot.system.memoryUsedBytes / snapshot.system.memoryTotalBytes * 100 : 0
-  return <div className="content-stack"><ResourceTrend snapshot={snapshot} kind="cpu" title={snapshot.system.cpuModel || 'CPU'} animate={animateChart} /><section className="panel system-resource-panel"><PanelHeader icon={<MemoryStick />} title="系统资源" /><div className="resource-bars"><MetricBar label="CPU" value={snapshot.system.cpuUtilization} currentUserValue={snapshot.system.currentUserCpuUtilization} currentUserDetail={`${snapshot.system.currentUserCpuUtilization.toFixed(1)}%`} /><MetricBar label="内存" value={memoryPercent} detail={`${formatBytes(snapshot.system.memoryUsedBytes)} / ${formatBytes(snapshot.system.memoryTotalBytes)}`} accent="purple" /></div><div className="stat-row stat-row--border"><span><small>1 分钟负载</small><strong>{snapshot.system.load1.toFixed(2)}</strong></span><span><small>5 分钟负载</small><strong>{snapshot.system.load5.toFixed(2)}</strong></span><span><small>15 分钟负载</small><strong>{snapshot.system.load15.toFixed(2)}</strong></span><span><small>Swap</small><strong>{formatBytes(snapshot.system.swapUsedBytes)}</strong></span></div><TelemetryGrid items={[
+  return <div className="content-stack"><ResourceTrend snapshot={snapshot} kind="cpu" title={snapshot.system.cpuModel || 'CPU'} animate={animateChart} /><section className="panel system-resource-panel"><PanelHeader icon={<MemoryStick />} title="系统资源" /><div className="resource-bars"><MetricBar label="CPU" value={snapshot.system.cpuUtilization} currentUserValue={snapshot.system.currentUserCpuUtilization} currentUserDetail={`${snapshot.system.currentUserCpuUtilization.toFixed(1)}%`} /><MetricBar label="内存" value={memoryPercent} detail={`${formatBytes(snapshot.system.memoryUsedBytes)} / ${formatBytes(snapshot.system.memoryTotalBytes)}`} accent="purple" currentUserValue={snapshot.system.memoryTotalBytes > 0 && (snapshot.system.currentUserMemoryUsedBytes ?? 0) >= 2 * 1024 ** 3 ? snapshot.system.currentUserMemoryUsedBytes! / snapshot.system.memoryTotalBytes * 100 : 0} currentUserDetail={snapshot.system.currentUserMemoryUsedBytes != null ? formatBytes(snapshot.system.currentUserMemoryUsedBytes) : undefined} /></div><div className="stat-row stat-row--border"><span><small>1 分钟负载</small><strong>{snapshot.system.load1.toFixed(2)}</strong></span><span><small>5 分钟负载</small><strong>{snapshot.system.load5.toFixed(2)}</strong></span><span><small>15 分钟负载</small><strong>{snapshot.system.load15.toFixed(2)}</strong></span><span><small>Swap</small><strong>{formatBytes(snapshot.system.swapUsedBytes)}</strong></span></div><TelemetryGrid items={[
     snapshot.system.cpuPhysicalCores !== undefined && snapshot.system.cpuPhysicalCores > 0 && snapshot.system.cpuLogicalCores !== undefined && snapshot.system.cpuLogicalCores > 0 && { label: '核心 / 线程', value: `${snapshot.system.cpuPhysicalCores} / ${snapshot.system.cpuLogicalCores}` },
     snapshot.system.cpuFrequencyMhz !== undefined && snapshot.system.cpuFrequencyMhz > 0 && { label: '当前频率', value: formatClock(snapshot.system.cpuFrequencyMhz) },
     snapshot.system.cpuMaxFrequencyMhz !== undefined && snapshot.system.cpuMaxFrequencyMhz > 0 && { label: '最高频率', value: formatClock(snapshot.system.cpuMaxFrequencyMhz) },
