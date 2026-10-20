@@ -37,7 +37,13 @@ unpinned and pinned again.
 ## Network and Package Routing
 
 The Linux updater reads manual GNOME HTTPS proxy settings through GSettings.
-Explicit `HTTPS_PROXY`/`ALL_PROXY` process settings retain precedence. GNOME PAC,
+Explicit `HTTPS_PROXY`/`ALL_PROXY` process settings retain precedence.
+The GNOME `ignore-hosts` list is combined with
+`NO_PROXY` (or lowercase `no_proxy`). Matching requests bypass the proxy during
+both update checks and package downloads, including redirects. Domain entries
+support GNOME wildcard/port rules and NO_PROXY domain/IP/CIDR rules: `github.com` also covers `api.github.com`;
+`githubusercontent.com` covers Raw and release asset hosts. Bypassing
+`github.com` alone does not bypass the separate `githubusercontent.com` domain. GNOME PAC,
 SOCKS-only configuration and other desktops' proxy preferences are not imported;
 use an HTTP(S) proxy environment variable for those setups.
 
@@ -64,7 +70,7 @@ artifacts or introduce a test-version downgrade.
 ```bash
 npm run test -- src/services/appUpdater.test.ts src/utils/appUpdate.test.ts
 npm run build
-cargo test --manifest-path src-tauri/Cargo.toml --lib linux_app_update::tests
+cargo test --manifest-path src-tauri/Cargo.toml --lib linux_app_update::
 appstreamcli validate --no-net src-tauri/linux/com.racktop.desktop.metainfo.xml
 ```
 

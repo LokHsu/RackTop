@@ -1,30 +1,45 @@
 //! Linux package routing and desktop proxy support for the official updater.
+mod proxy;
+
 use gio::prelude::*;
 use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 
-fn linux_system_proxy() -> Option<tauri::Url> {
-    // Preserve reqwest's explicit process proxy precedence and NO_PROXY rules.
-    if ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+fn linux_system_proxy() -> Option<reqwest::Proxy> {
+    // Keep explicit environment proxies ahead of desktop proxy settings.
+    let environment_proxy = ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
         .iter()
-        .any(|name| std::env::var(name).is_ok_and(|value| !value.is_empty()))
-    {
-        return None;
-    }
+        .filter_map(|name| std::env::var(name).ok())
+        .find(|value| !value.is_empty());
     let source = gio::SettingsSchemaSource::default()?;
     let schema = source.lookup("org.gnome.system.proxy", true)?;
     let settings = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
-    if settings.string("mode") != "manual" {
-        return None;
-    }
-    let https = settings.child("https");
-    let mut proxy = proxy_url(&https.string("host"), https.int("port"));
-    if proxy.is_none() && settings.boolean("use-same-proxy") {
-        let http = settings.child("http");
-        proxy = proxy_url(&http.string("host"), http.int("port"));
-    }
-    proxy
+    let url = environment_proxy.or_else(|| {
+        if settings.string("mode") != "manual" {
+            return None;
+        }
+        let https = settings.child("https");
+        let mut proxy = proxy_url(&https.string("host"), https.int("port"));
+        if proxy.is_none() && settings.boolean("use-same-proxy") {
+            let http = settings.child("http");
+            proxy = proxy_url(&http.string("host"), http.int("port"));
+        }
+        proxy.map(|url| url.to_string())
+    })?;
+    let ignored_hosts = settings.strv("ignore-hosts");
+    let no_proxy = std::env::var("NO_PROXY")
+        .or_else(|_| std::env::var("no_proxy"))
+        .ok();
+    proxy::with_bypass(
+        &url,
+        &ignored_hosts
+            .iter()
+            .map(|host| host.to_string())
+            .collect::<Vec<_>>(),
+        no_proxy.as_deref(),
+    )
+    .ok()
 }
 
 fn proxy_url(host: &str, port: i32) -> Option<tauri::Url> {
@@ -56,12 +71,17 @@ pub async fn check_linux_app_update(webview: tauri::Webview) -> Result<Option<se
     if let Some(target) = target_for_bundle(tauri::utils::platform::bundle_type())? {
         builder = builder.target(target);
     }
-    if let Some(proxy) = linux_system_proxy() {
-        builder = builder.proxy(proxy);
-    }
+    let proxy = linux_system_proxy();
     let updater = builder
         .timeout(Duration::from_secs(30))
-        .configure_client(|client| client.connect_timeout(Duration::from_secs(10)))
+        // This callback also configures package downloads, including redirected hosts.
+        .configure_client(move |client| {
+            let client = client.connect_timeout(Duration::from_secs(10));
+            match &proxy {
+                Some(proxy) => client.proxy(proxy.clone()),
+                None => client,
+            }
+        })
         // The Contents API requires this media type to return the file itself.
         .header("Accept", "application/vnd.github.raw+json")
         .map_err(|error| error.to_string())?
