@@ -1,3 +1,6 @@
+mod app_update;
+#[cfg(target_os = "linux")]
+mod linux_app_update;
 pub mod collector;
 mod host_key;
 pub mod models;
@@ -1476,6 +1479,9 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(target_os = "linux")]
+            linux_app_update::check_linux_app_update,
+            app_update::install_windows_update,
             list_servers,
             save_server,
             list_server_notification_settings,

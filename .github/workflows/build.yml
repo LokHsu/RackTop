@@ -51,6 +51,15 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run bundle:linux
+      - name: Sign DEB updater package
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          for package in src-tauri/target/release/bundle/deb/*.deb; do
+            npm run tauri -- signer sign "$package"
+            test -s "$package.sig"
+          done
       - name: Smoke-test packaged application
         run: |
           set -euo pipefail
@@ -76,6 +85,7 @@ jobs:
           if-no-files-found: error
           path: |
             src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/deb/*.sig
             src-tauri/target/release/bundle/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
@@ -88,9 +98,15 @@ jobs:
 
   macos:
     if: inputs.build_macos
-    runs-on: macos-14
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 27 and record SDK
+        shell: bash
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState } from 'react'
-import { CheckCircle2, ChevronUp, CircleX, Cpu, LoaderCircle, TerminalSquare } from 'lucide-react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { CheckCircle2, ChevronDown, ChevronUp, CircleX, Cpu, LoaderCircle, TerminalSquare } from 'lucide-react'
 import type { CpuProcessMetric, ProcessMetric, Snapshot } from '../types/models'
 import { formatGpuProcessMemory } from '../utils/gpu'
 import { cpuProcessRelation, gpuProcessRelation, processTaskRootPid } from '../utils/processRelations'
@@ -72,6 +72,22 @@ function CpuProcessRows({ processes, snapshot, selection, terminatingPid, onSele
   })}</tbody>
 }
 
+// Memory only: survives page/server navigation, resets when the App closes.
+const expandedProcessLists = new Set<string>()
+
+function ProcessTableViewport({ compact, serverId, kind, total, label, children }: { compact: boolean; serverId: string; kind: 'gpu' | 'cpu'; total: number; label: string; children: (count: number) => ReactNode }) {
+  const preferenceKey = JSON.stringify([serverId, kind])
+  const [expanded, setExpanded] = useState(() => expandedProcessLists.has(preferenceKey))
+  const count = compact && !expanded ? Math.min(5, total) : total
+  const toggleExpanded = () => {
+    const next = !expanded
+    if (next) expandedProcessLists.add(preferenceKey)
+    else expandedProcessLists.delete(preferenceKey)
+    setExpanded(next)
+  }
+  return <div className="table-scroll" role={compact ? 'region' : undefined} aria-label={compact ? label : undefined}>{children(count)}{compact && total > 5 && <button className="process-list-more" type="button" onClick={toggleExpanded} aria-expanded={expanded} aria-label={`${label}：${expanded ? '收起' : '展开全部'}`}><span>{expanded ? '收起' : `另有 ${total - count} 个 ${label.replace('列表', '')}，展开全部`}</span>{expanded ? <ChevronUp size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />}</button>}</div>
+}
+
 export function ProcessBlocks({ snapshot, compact = false, hideEmptyBlocks = false, terminatingPid, onRequestTerminate, currentLabels = false, loading = false }: { snapshot: Snapshot; compact?: boolean; hideEmptyBlocks?: boolean; terminatingPid?: number; onRequestTerminate?: (target: ProcessTerminationTarget) => void; currentLabels?: boolean; loading?: boolean }) {
   const [selection, setSelection] = useState<ProcessSelection>(null)
   useEffect(() => {
@@ -80,15 +96,15 @@ export function ProcessBlocks({ snapshot, compact = false, hideEmptyBlocks = fal
       if (!exists) setSelection(null)
     }
   }, [selection, snapshot.cpuProcesses, snapshot.processes])
-  const gpuProcesses = compact ? snapshot.processes.slice(0, 5) : snapshot.processes
-  const cpuProcesses = compact ? snapshot.cpuProcesses.slice(0, 5) : snapshot.cpuProcesses
+  const gpuProcesses = snapshot.processes
+  const cpuProcesses = snapshot.cpuProcesses
   const terminatingGpuPid = terminatingPid !== undefined && snapshot.processes.some((process) => process.pid === terminatingPid) ? terminatingPid : undefined
   const terminatingCpuPid = terminatingPid !== undefined && snapshot.cpuProcesses.some((process) => process.pid === terminatingPid) ? terminatingPid : undefined
   const accelerator = acceleratorLabel(snapshot)
 
   return <div className={`process-blocks ${compact ? 'process-blocks--compact' : ''}`}>
     {loading && <div className="process-loading-state" role="status" aria-live="polite"><LoaderCircle className="spin" size={15} /><span><strong>正在枚举进程</strong><small>当前仍显示上一次采样结果</small></span></div>}
-    {(!hideEmptyBlocks || snapshot.processes.length > 0) && <section className="panel process-panel"><ProcessHeader kind="gpu" count={snapshot.processes.length} terminatingPid={terminatingGpuPid} currentLabels={currentLabels} accelerator={accelerator} />{gpuProcesses.length ? <div className="table-scroll"><table className="process-table process-table--gpu"><ProcessColGroup kind="gpu" compact={compact} /><thead><tr><th aria-label="操作" /><th>{accelerator}</th><th>PID</th><th>用户</th><th>命令</th><th>显存</th>{!compact && <th>CPU</th>}<th>运行时间</th></tr></thead><GpuProcessRows processes={gpuProcesses} snapshot={snapshot} selection={selection} terminatingPid={terminatingPid} onSelect={setSelection} onRequestTerminate={onRequestTerminate} compact={compact} /></table></div> : <EmptyProcessBlock kind="gpu" accelerator={accelerator} />}{compact && snapshot.processes.length > gpuProcesses.length && <p className="process-block__more">另有 {snapshot.processes.length - gpuProcesses.length} 个 {accelerator} 进程，请在“进程”页查看</p>}</section>}
-    {(!hideEmptyBlocks || snapshot.cpuProcesses.length > 0) && <section className="panel process-panel"><ProcessHeader kind="cpu" count={snapshot.cpuProcesses.length} terminatingPid={terminatingCpuPid} currentLabels={currentLabels} accelerator={accelerator} />{cpuProcesses.length ? <div className="table-scroll"><table className="process-table process-table--cpu"><ProcessColGroup kind="cpu" compact={compact} /><thead><tr><th aria-label="操作" /><th>PID</th><th>用户</th><th>命令</th><th>CPU</th>{!compact && <th>系统内存</th>}<th>运行时间</th></tr></thead><CpuProcessRows processes={cpuProcesses} snapshot={snapshot} selection={selection} terminatingPid={terminatingPid} onSelect={setSelection} onRequestTerminate={onRequestTerminate} compact={compact} /></table></div> : <EmptyProcessBlock kind="cpu" accelerator={accelerator} />}{compact && snapshot.cpuProcesses.length > cpuProcesses.length && <p className="process-block__more">另有 {snapshot.cpuProcesses.length - cpuProcesses.length} 个 CPU 进程，请在“进程”页查看</p>}</section>}
+    {(!hideEmptyBlocks || snapshot.processes.length > 0) && <section className="panel process-panel"><ProcessHeader kind="gpu" count={snapshot.processes.length} terminatingPid={terminatingGpuPid} currentLabels={currentLabels} accelerator={accelerator} />{gpuProcesses.length ? <ProcessTableViewport key={snapshot.serverId} serverId={snapshot.serverId} compact={compact} kind="gpu" total={gpuProcesses.length} label={`${accelerator} 进程列表`}>{count => <table className="process-table process-table--gpu"><ProcessColGroup kind="gpu" compact={compact} /><thead><tr><th aria-label="操作" /><th>{accelerator}</th><th>PID</th><th>用户</th><th>命令</th><th>显存</th>{!compact && <th>CPU</th>}<th>运行时间</th></tr></thead><GpuProcessRows processes={gpuProcesses.slice(0, count)} snapshot={snapshot} selection={selection} terminatingPid={terminatingPid} onSelect={setSelection} onRequestTerminate={onRequestTerminate} compact={compact} /></table>}</ProcessTableViewport> : <EmptyProcessBlock kind="gpu" accelerator={accelerator} />}</section>}
+    {(!hideEmptyBlocks || snapshot.cpuProcesses.length > 0) && <section className="panel process-panel"><ProcessHeader kind="cpu" count={snapshot.cpuProcesses.length} terminatingPid={terminatingCpuPid} currentLabels={currentLabels} accelerator={accelerator} />{cpuProcesses.length ? <ProcessTableViewport key={snapshot.serverId} serverId={snapshot.serverId} compact={compact} kind="cpu" total={cpuProcesses.length} label={'CPU 进程列表'}>{count => <table className="process-table process-table--cpu"><ProcessColGroup kind="cpu" compact={compact} /><thead><tr><th aria-label="操作" /><th>PID</th><th>用户</th><th>命令</th><th>CPU</th>{!compact && <th>系统内存</th>}<th>运行时间</th></tr></thead><CpuProcessRows processes={cpuProcesses.slice(0, count)} snapshot={snapshot} selection={selection} terminatingPid={terminatingPid} onSelect={setSelection} onRequestTerminate={onRequestTerminate} compact={compact} /></table>}</ProcessTableViewport> : <EmptyProcessBlock kind="cpu" accelerator={accelerator} />}</section>}
   </div>
 }

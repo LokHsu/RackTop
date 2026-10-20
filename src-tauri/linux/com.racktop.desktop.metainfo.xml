@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.racktop.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>RackTop</name>
+  <summary>GPU and CPU server monitoring over SSH</summary>
+  <description>
+    <p>RackTop monitors GPU, CPU, memory and processes across Linux servers over SSH.</p>
+    <p>Manage remote terminals, projects and training tasks from a single desktop application.</p>
+  </description>
+  <launchable type="desktop-id">RackTop.desktop</launchable>
+  <provides>
+    <binary>racktop</binary>
+  </provides>
+  <pkgname>rack-top</pkgname>
+  <icon type="stock">racktop</icon>
+  <categories>
+    <category>Development</category>
+  </categories>
+  <url type="homepage">https://github.com/Tongzh-SEU/RackTop</url>
+  <url type="bugtracker">https://github.com/Tongzh-SEU/RackTop/issues</url>
+  <developer id="io.github.tongzh-seu">
+    <name>Tongzh-SEU</name>
+  </developer>
+</component>
