@@ -16,6 +16,9 @@
 
 ### 本版本修改
 
+- 修复 Linux 应用图标透明圆角、桌面集成与侧栏品牌图标缩放；DEB 和 AppImage 分别使用对应签名更新包，DEB 安装通过系统授权。感谢 ChenxuLi-cxli 提交 PR #139。
+- 中英文 README 稳定版及安装包下载链接更新至 1.26.1，macOS DMG 使用实际的 unsigned 文件名。
+
 - Linux 自动更新合并 GNOME `ignore-hosts` 与 `NO_PROXY`（未设置时读取 `no_proxy`）绕过规则，按清单、安装包及重定向后的地址分别选择直连或代理，支持 GNOME 域名通配符、端口和 IP/CIDR 规则。
 
 - macOS Actions 改用 xcode-27 runner，并显式选择 Xcode 27，输出实际 Xcode 和 macOS SDK 版本；沿用现有测试、签名及打包流程，最低系统版本保持不变。新版原生窗口按钮外观待 macOS 27 实机验证，runner 当前仍为 GitHub 预览镜像。
