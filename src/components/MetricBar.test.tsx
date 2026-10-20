@@ -18,6 +18,15 @@ describe('MetricBar current-user marker', () => {
     expect(markup).toContain('你 10.0 GB')
   })
 
+  it('hides user indicators when a positive sample rounds to zero at display precision', () => {
+    for (const detail of ['0.0 GB', '0.0%']) {
+      const markup = renderToStaticMarkup(<MetricBar label="MEM" value={30} currentUserValue={0.01} currentUserDetail={detail} />)
+      expect(markup).not.toContain('metric-bar__own')
+      expect(markup).not.toContain('当前用户')
+      expect(markup).not.toContain('你 ')
+    }
+  })
+
   it('uses the cursor marker for current-user CPU utilization', () => {
     const markup = renderToStaticMarkup(<MetricBar label="CPU UTL" value={62} currentUserValue={18.5} currentUserDetail="18.5%" />)
 

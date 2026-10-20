@@ -23,6 +23,7 @@ describe('CPU system memory marker', () => {
     for (const system of [
       { ...snapshot.system, currentUserMemoryUsedBytes: undefined },
       { ...snapshot.system, currentUserMemoryUsedBytes: 0 },
+      { ...snapshot.system, currentUserMemoryUsedBytes: 20 * 1024 ** 2 },
       { ...snapshot.system, memoryTotalBytes: 0 },
     ]) {
       const html = renderToStaticMarkup(<CpuOverviewCard snapshot={{ ...snapshot, system }} memoryPercent={0} onOpen={() => {}} />)

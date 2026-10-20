@@ -12,7 +12,9 @@ interface MetricBarProps {
 
 export function MetricBar({ label, value, detail, accent = 'blue', currentUserValue = 0, currentUserDetail }: MetricBarProps) {
   const safeValue = clampPercent(value)
-  const ownValue = clampPercent(currentUserValue)
+  // Match the displayed precision: a rounded zero must not leave a cursor at the origin.
+  const ownValue = currentUserDetail && Number.parseFloat(currentUserDetail) === 0
+    ? 0 : clampPercent(currentUserValue)
   const showOwnMarker = ownValue > 0 && Boolean(currentUserDetail)
 
   return (
