@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { CheckCircle2, ChevronUp, CircleX, Cpu, LoaderCircle, TerminalSquare } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, CircleX, Cpu, LoaderCircle, TerminalSquare } from 'lucide-react'
 import type { CpuProcessMetric, ProcessMetric, Snapshot } from '../types/models'
 import { formatGpuProcessMemory } from '../utils/gpu'
 import { cpuProcessRelation, gpuProcessRelation, processTaskRootPid } from '../utils/processRelations'
@@ -76,10 +76,7 @@ function ProcessTableViewport({ compact, total, label, children }: { compact: bo
   const [limit, setLimit] = useState(10)
   const count = compact ? Math.min(limit, total) : total
   const showMore = () => setLimit(current => Math.min(total, current + 10))
-  return <><div className={`table-scroll${compact ? ' table-scroll--process-preview' : ''}`} tabIndex={compact ? 0 : undefined} role={compact ? 'region' : undefined} aria-label={compact ? label : undefined} onScroll={compact ? (event) => {
-    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
-    if (scrollHeight > clientHeight && scrollTop + clientHeight >= scrollHeight - 24 && count < total) showMore()
-  } : undefined}>{children(count)}</div>{compact && <div className="process-block__more"><span>已显示 {count} / {total} 个进程</span>{count < total && <button type="button" onClick={showMore} aria-label={`${label}：再显示 ${Math.min(10, total - count)} 个`}>显示更多（{Math.min(10, total - count)}）</button>}</div>}</>
+  return <div className="table-scroll" role={compact ? 'region' : undefined} aria-label={compact ? label : undefined}>{children(count)}{compact && count < total && <button className="process-list-more" type="button" onClick={showMore} aria-label={`${label}：再显示 ${Math.min(10, total - count)} 个`}><ChevronDown size={13} aria-hidden="true" /><span>显示更多</span><span className="process-list-more__count">{count} / {total}</span></button>}</div>
 }
 
 export function ProcessBlocks({ snapshot, compact = false, hideEmptyBlocks = false, terminatingPid, onRequestTerminate, currentLabels = false, loading = false }: { snapshot: Snapshot; compact?: boolean; hideEmptyBlocks?: boolean; terminatingPid?: number; onRequestTerminate?: (target: ProcessTerminationTarget) => void; currentLabels?: boolean; loading?: boolean }) {
