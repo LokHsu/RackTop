@@ -3055,6 +3055,7 @@ version = "1.26.1"
 dependencies = [
  "base64 0.22.1",
  "dirs",
+ "gio",
  "keyring",
  "portable-pty",
  "rusqlite",
