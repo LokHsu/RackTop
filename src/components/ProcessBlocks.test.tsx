@@ -115,7 +115,7 @@ describe('ProcessBlocks', () => {
     } finally { await act(async () => root.unmount()); container.remove() }
   })
 
-  it('remembers each list across page remounts and server switches without storing it on disk', async () => {
+  it('remembers each server list across page remounts without expanding other pages', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
     const many = { ...snapshot,
@@ -130,6 +130,9 @@ describe('ProcessBlocks', () => {
       expect(rows('cpu')).toBe(5)
       await act(async () => root.render(<div>其他页面</div>))
       await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, serverId: 'server-2' }} compact />))
+      expect(rows('gpu')).toBe(5)
+      expect(rows('cpu')).toBe(5)
+      await act(async () => root.render(<ProcessBlocks snapshot={many} compact />))
       expect(rows('gpu')).toBe(37)
       expect(rows('cpu')).toBe(5)
       await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="CPU 进程列表：展开全部"]')!.click())
