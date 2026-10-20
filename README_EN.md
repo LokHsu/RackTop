@@ -35,13 +35,13 @@ Find the right GPU before launching a job, monitor resources and processes while
 
 ## Download
 
-Current stable release: **v1.26.0**
+Current stable release: **v1.26.1**
 
 | Platform | Installer | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | `RackTop_1.26.0_macos-arm64.dmg` | [Download for macOS](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_macos-arm64.dmg) |
-| Windows x64 | `RackTop_1.26.0_x64-setup.exe` | [Download for Windows](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_x64-setup.exe) |
-| Linux Ubuntu/Debian x64 | `RackTop_1.26.0_amd64.deb` | [Download for Linux](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.0/RackTop_1.26.0_amd64.deb) |
+| macOS Apple Silicon | `RackTop_1.26.1_macos-arm64-unsigned.dmg` | [Download for macOS](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.1/RackTop_1.26.1_macos-arm64-unsigned.dmg) |
+| Windows x64 | `RackTop_1.26.1_x64-setup.exe` | [Download for Windows](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.1/RackTop_1.26.1_x64-setup.exe) |
+| Linux Ubuntu/Debian x64 | `RackTop_1.26.1_amd64.deb` | [Download for Linux](https://github.com/Tongzh-SEU/RackTop/releases/download/v1.26.1/RackTop_1.26.1_amd64.deb) |
 
 See [GitHub Releases](https://github.com/Tongzh-SEU/RackTop/releases) for additional versions.
 
