@@ -89,6 +89,7 @@ export interface SystemMetric {
   cpuModel: string
   cpuUtilization: number
   currentUserCpuUtilization: number
+  currentUserMemoryUsedBytes?: number | null
   load1: number
   load5: number
   load15: number
