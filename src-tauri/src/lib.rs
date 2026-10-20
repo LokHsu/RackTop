@@ -1,3 +1,4 @@
+mod app_update;
 pub mod collector;
 mod host_key;
 pub mod models;
@@ -1476,6 +1477,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            app_update::install_windows_update,
             list_servers,
             save_server,
             list_server_notification_settings,
