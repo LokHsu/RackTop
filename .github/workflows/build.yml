@@ -88,9 +88,15 @@ jobs:
 
   macos:
     if: inputs.build_macos
-    runs-on: macos-14
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 27 and record SDK
+        shell: bash
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
       - uses: actions/setup-node@v4
         with:
           node-version: 22
