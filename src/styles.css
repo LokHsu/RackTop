@@ -593,6 +593,13 @@ button.gpu-card:active { transform: scale(.99); }
 .process-block__more { margin: 0; padding: 9px 12px; border-top: 1px solid var(--border); color: var(--text-tertiary); background: var(--surface-subtle); font-size: calc(9px + var(--font-adjust, 0px)); }
 .process-block__empty { min-height: 132px; padding: 28px; }
 .table-scroll { overflow: auto; }
+.table-scroll--process-preview { max-height: 260px; }
+.table-scroll--process-preview th { position: sticky; top: 0; z-index: 1; }
+.table-scroll--process-preview:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.process-block__more { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.process-block__more button { border: 0; padding: 3px 6px; background: transparent; color: var(--blue); cursor: pointer; font: inherit; }
+.process-block__more button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
 table { width: 100%; border-collapse: collapse; font-size: calc(11px + var(--font-adjust, 0px)); }
 th { padding: 8px 12px; color: var(--text-tertiary); background: var(--surface-subtle); text-align: left; font-size: calc(9px + var(--font-adjust, 0px)); text-transform: uppercase; letter-spacing: .04em; }
 td { padding: 10px 12px; border-top: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }

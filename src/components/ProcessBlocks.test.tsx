@@ -92,4 +92,41 @@ describe('ProcessBlocks', () => {
     expect(container.querySelector('.process-inline-inspector')).toBeNull()
     await act(async () => root.unmount())
   })
+  it('loads GPU and CPU lists independently in batches of at most ten without a total cap', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const many = { ...snapshot,
+      processes: Array.from({ length: 37 }, (_, i) => ({ ...snapshot.processes[0], pid: 30000 + i })),
+      cpuProcesses: Array.from({ length: 24 }, (_, i) => ({ ...snapshot.cpuProcesses[0], pid: 40000 + i })),
+    }
+    try {
+      await act(async () => root.render(<ProcessBlocks snapshot={many} compact currentLabels />))
+      const rows = (kind: string) => container.querySelectorAll(`.process-table--${kind} tbody tr`).length
+      const gpuScroll = container.querySelector<HTMLElement>('[aria-label="GPU 进程列表"]')!
+      Object.defineProperties(gpuScroll, { scrollHeight: { value: 700 }, clientHeight: { value: 260 }, scrollTop: { value: 440 } })
+      expect(rows('gpu')).toBe(10)
+      expect(rows('cpu')).toBe(10)
+      await act(async () => gpuScroll.dispatchEvent(new Event('scroll')))
+      expect(rows('gpu')).toBe(20)
+      expect(rows('cpu')).toBe(10)
+      await act(async () => gpuScroll.dispatchEvent(new Event('scroll')))
+      expect(rows('gpu')).toBe(30)
+      await act(async () => gpuScroll.dispatchEvent(new Event('scroll')))
+      expect(rows('gpu')).toBe(37)
+      expect(container.querySelector('[aria-label^="GPU 进程列表：再显示"]')).toBeNull()
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="CPU 进程列表：再显示 10 个"]')!.click())
+      expect(rows('cpu')).toBe(20)
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="CPU 进程列表：再显示 4 个"]')!.click())
+      expect(rows('cpu')).toBe(24)
+      // Refreshing telemetry preserves progress; changing servers resets it.
+      await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, timestamp: 2 }} compact currentLabels />))
+      expect(rows('gpu')).toBe(37)
+      await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, serverId: 'server-2' }} compact currentLabels />))
+      expect(rows('gpu')).toBe(10)
+      expect(rows('cpu')).toBe(10)
+      await act(async () => root.render(<ProcessBlocks snapshot={{ ...many, processes: [], cpuProcesses: [] }} compact />))
+      expect(container.querySelector('.table-scroll')).toBeNull()
+    } finally { await act(async () => root.unmount()) }
+  })
+
 })

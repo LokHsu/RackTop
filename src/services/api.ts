@@ -211,11 +211,35 @@ const ppuSnapshot: Snapshot = {
   ],
 }
 
-function browserSnapshotFor(serverId: string) {
-  if (serverId === 'demo-132') return a100Snapshot
-  if (serverId === 'demo-ascend') return ascendSnapshot
-  if (serverId === 'demo-ppu') return ppuSnapshot
-  return demoSnapshot
+function browserSnapshotFor(serverId: string): Snapshot {
+  const source = serverId === 'demo-132' ? a100Snapshot
+    : serverId === 'demo-ascend' ? ascendSnapshot
+    : serverId === 'demo-ppu' ? ppuSnapshot : demoSnapshot
+  // Browser-only demo data: enough rows to exercise multiple batches and a partial last batch.
+  return {
+    ...source,
+    serverId,
+    processes: Array.from({ length: 37 }, (_, index) => ({
+      ...source.processes[0],
+      pid: 50000 + index,
+      parentPid: 1,
+      command: `python preview_gpu_task_${index + 1}.py`,
+      memoryUsedMb: 256 + index * 8,
+      isGroupLeader: true,
+    })),
+    cpuProcesses: Array.from({ length: 43 }, (_, index) => ({
+      pid: 60000 + index,
+      parentPid: 1,
+      username: source.username,
+      command: `python preview_cpu_task_${index + 1}.py`,
+      cpuPercent: 0.5 + index / 10,
+      memoryPercent: 0.5,
+      memoryUsedBytes: (1024 + index * 8) * 1024 ** 2,
+      elapsed: '00:12:34',
+      isCurrentUser: true,
+      isGroupLeader: true,
+    })),
+  }
 }
 
 let browserServers = [...demoServers]

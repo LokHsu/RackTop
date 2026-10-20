@@ -196,14 +196,33 @@ async function toggleWindowMaximize(event: MouseEvent<HTMLElement>) {
 }
 
 export function DesktopWindowControls({ platform = appPlatform }: { platform?: ReturnType<typeof detectAppPlatform> }) {
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => {
+    if (platform !== 'windows' || !api.isDesktop) return
+    const window = getCurrentWindow()
+    let disposed = false
+    let revision = 0
+    let unlisten: (() => void) | undefined
+    const update = async () => {
+      const current = ++revision
+      const value = await window.isMaximized()
+      if (!disposed && current === revision) setMaximized(value)
+    }
+    void window.onResized(() => { void update().catch(console.error) }).then((stop) => {
+      if (disposed) stop()
+      else { unlisten = stop; void update().catch(console.error) }
+    }).catch(console.error)
+    return () => { disposed = true; unlisten?.() }
+  }, [platform])
   if (platform !== 'windows' && platform !== 'linux') return null
+  const maximizeLabel = platform === 'windows' ? (maximized ? '还原窗口' : '最大化窗口') : '最大化或还原窗口'
   const windowAction = (command: string) => platform === 'windows'
     ? { onMouseDown: (event: MouseEvent<HTMLButtonElement>) => { event.preventDefault(); event.stopPropagation(); void invoke(command) } }
     : { onClick: () => void invoke(command) }
   return (
     <div className="window-controls" aria-label="窗口控制" onMouseDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
       <button type="button" {...windowAction('window_minimize')} aria-label="最小化窗口" title={platform === 'linux' ? '最小化窗口' : undefined}><Minus size={15} /></button>
-      <button type="button" {...windowAction('window_toggle_maximize')} aria-label="最大化或还原窗口" title={platform === 'linux' ? '最大化或还原窗口' : undefined}><Square size={12} /></button>
+      <button type="button" {...windowAction('window_toggle_maximize')} aria-label={maximizeLabel} title={maximizeLabel}>{platform === 'windows' && maximized ? <Copy size={12} /> : <Square size={12} />}</button>
       <button type="button" className="window-controls__close" {...windowAction('window_close')} aria-label="关闭窗口" title={platform === 'linux' ? '关闭窗口' : undefined}><X size={15} /></button>
     </div>
   )
