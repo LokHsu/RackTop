@@ -4,6 +4,9 @@
 
 ## 1.26.2
 
+- 修复“我的进程”启动配置名称过长撑宽卡片的问题，过长名称显示省略号。感谢 [LokHsu](https://github.com/LokHsu) 提交 [PR #150](https://github.com/Tongzh-SEU/RackTop/pull/150)。
+- 优化启动配置的 GPU 数量和每卡最低空闲显存输入，支持清空编辑并在失焦时去除多余前导零。感谢 [LokHsu](https://github.com/LokHsu) 提交 [PR #150](https://github.com/Tongzh-SEU/RackTop/pull/150)。
+
 - 修复 NVIDIA GB10 / DGX Spark 共享内存设备远端历史中的 GPU 显存与利用率记录，显存字段不可用时按共享内存池估算容量与占用。
 - 修复 GB10 / DGX Spark 把共享系统内存误判为专用 GPU 显存持续占用告警的问题。
 - 感谢 [CAN230921](https://github.com/CAN230921) 提交 [PR #147](https://github.com/Tongzh-SEU/RackTop/pull/147)，并关联 [Issue #93](https://github.com/Tongzh-SEU/RackTop/issues/93)。
