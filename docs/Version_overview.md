@@ -11,7 +11,12 @@
 - 修复 GB10 / DGX Spark 把共享系统内存误判为专用 GPU 显存持续占用告警的问题。
 - 感谢 [CAN230921](https://github.com/CAN230921) 提交 [PR #147](https://github.com/Tongzh-SEU/RackTop/pull/147)，并关联 [Issue #93](https://github.com/Tongzh-SEU/RackTop/issues/93)。
 - 按 SSH 主机和端口隔离远端历史、用量、心跳、采集器 PID 与锁文件，修复共享用户目录造成的历史串台和采集互相抑制问题。
-- App 关闭后远端继续采集 GPU 温度、功耗和风扇数据，重新打开 App 时同步最新历史。
+- App 关闭后远端继续采集 GPU 温度、功耗和风扇数据，重新打开 App 时同步最新历史。感谢 [JustHeart31](https://github.com/JustHeart31) 在 [Issue #148](https://github.com/Tongzh-SEU/RackTop/issues/148) 中反馈 GPU 温度趋势问题。
+
+- 修复历史缓存过期后未释放导致的内存持续增长。感谢 [JustHeart31](https://github.com/JustHeart31) 通过 [Issue #153](https://github.com/Tongzh-SEU/RackTop/issues/153) 反馈 Windows 长时间闲置白屏；白屏恢复情况仍待 Windows 实机验证。
+- CPU 进程取消 1 GiB 内存门槛等筛选，展示所有可读取进程，按 CPU 使用率排序。
+- 概览页 CPU 进程默认显示前 5 个，支持展开全部和收起。
+- Issue #148 中温度曲线卡顿及鼠标跟随提示的问题尚待独立验证。
 
 ## 1.26.1
 
