@@ -28,7 +28,7 @@ function toggleSelection(current: ProcessSelection, next: Exclude<ProcessSelecti
 }
 
 function ProcessHeader({ kind, count, terminatingPid, currentLabels, accelerator }: { kind: 'gpu' | 'cpu'; count: number; terminatingPid?: number; currentLabels: boolean; accelerator: string }) {
-  return <header className="panel__header process-block__header"><div><span>{kind === 'gpu' ? <TerminalSquare /> : <Cpu />}</span><div><h3>{currentLabels ? '当前 ' : ''}{kind === 'gpu' ? `${accelerator} 进程` : 'CPU 进程'}</h3><p>{kind === 'gpu' ? `${count} 个计算进程 · 按任务颜色分组` : `${count} 个非系统进程 · 内存大于 1 GB`}</p></div></div>{terminatingPid !== undefined && <span className="process-block__terminating" role="status" aria-live="polite"><LoaderCircle className="spin" size={15} />正在结束 PID {terminatingPid}</span>}</header>
+  return <header className="panel__header process-block__header"><div><span>{kind === 'gpu' ? <TerminalSquare /> : <Cpu />}</span><div><h3>{currentLabels ? '当前 ' : ''}{kind === 'gpu' ? `${accelerator} 进程` : 'CPU 进程'}</h3><p>{kind === 'gpu' ? `${count} 个计算进程 · 按任务颜色分组` : `${count} 个进程 · 按 CPU 使用率排序`}</p></div></div>{terminatingPid !== undefined && <span className="process-block__terminating" role="status" aria-live="polite"><LoaderCircle className="spin" size={15} />正在结束 PID {terminatingPid}</span>}</header>
 }
 
 function EmptyProcessBlock({ kind, accelerator }: { kind: 'gpu' | 'cpu'; accelerator: string }) {
