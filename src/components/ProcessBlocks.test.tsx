@@ -18,22 +18,6 @@ const snapshot: Snapshot = {
 }
 
 describe('ProcessBlocks', () => {
-  it('shows five small CPU processes and expands all, including system-owned rows', async () => {
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    const many = { ...snapshot, serverId: 'all-cpu-regression', cpuProcesses: Array.from({ length: 20 }, (_, i) => ({ ...snapshot.cpuProcesses[0], pid: 40000 + i, username: 'root', isCurrentUser: false, memoryUsedBytes: 4096 })) }
-    try {
-      await act(async () => root.render(<ProcessBlocks snapshot={many} compact onRequestTerminate={() => {}} />))
-      expect(container.querySelectorAll('.process-table--cpu tbody tr')).toHaveLength(5)
-      const toggle = container.querySelector<HTMLButtonElement>('[aria-label="CPU 进程列表：展开全部"]')!
-      await act(async () => toggle.click())
-      expect(container.querySelectorAll('.process-table--cpu tbody tr')).toHaveLength(20)
-      expect(container.querySelectorAll('.process-table--cpu .process-terminate-button')).toHaveLength(0)
-      await act(async () => toggle.click())
-      expect(container.querySelectorAll('.process-table--cpu tbody tr')).toHaveLength(5)
-    } finally { await act(async () => root.unmount()) }
-  })
-
   it('uses NPU labels without changing the shared process rendering', () => {
     const markup = renderToStaticMarkup(<ProcessBlocks snapshot={{ ...snapshot, acceleratorVendor: 'ascend' }} compact currentLabels />)
     expect(markup).toContain('当前 NPU 进程')

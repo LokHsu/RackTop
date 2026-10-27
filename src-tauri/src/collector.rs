@@ -1,7 +1,7 @@
 use crate::models::{CpuProcessMetric, DiskMetric, GpuMetric, ManagedRunLaunchResult, ManagedRunRemoteStatus, ProcessMetric, Server, Snapshot, SystemMetric};
 use crate::ssh_keys::expand_identity_path;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use std::{collections::HashMap, process::Stdio, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::{HashMap, HashSet}, process::Stdio, time::{SystemTime, UNIX_EPOCH}};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use tokio::{process::Command, time::{timeout, Duration}};
@@ -164,7 +164,8 @@ if [ "${RACKTOP_INCLUDE_PROCESSES:-1}" = "1" ]; then
   printf '__RACKTOP_GPUPMON__\n';
   if [ "$racktop_accelerator" = nvidia ]; then nvidia-smi pmon -c 1 -s um 2>/dev/null || true; fi;
   printf '__RACKTOP_PS__\n';
-  ps -eo user:64=,uid=,pid=,ppid=,pgid=,pcpu=,pmem=,rss=,etime=,args= --sort=-pcpu 2>/dev/null || true;
+  gpu_pids="$(printf '%s\n' "$gpu_proc" | cut -d, -f2 | tr -d ' ' | paste -sd, -)";
+  ps -eo user:64=,uid=,pid=,ppid=,pgid=,pcpu=,pmem=,rss=,etime=,args= --sort=-pcpu 2>/dev/null | awk -v gpu_pids="$gpu_pids" -v uid_min="$uid_min" 'BEGIN { n=split(gpu_pids, ids, ","); for (i=1; i<=n; i++) if (ids[i] != "") gpu[ids[i]]=1 } { is_gpu=($3 in gpu); is_child=($4 in gpu); is_user=($2 >= uid_min); is_main=($3 == $5 && $6 > 0); has_memory=($8 > 1048576); if (is_gpu || (is_user && has_memory && (is_child || (is_main && main_count < 64)))) { print; if (!is_gpu && is_main && !is_child) main_count++ } }' || true;
 fi;
 printf '__RACKTOP_END__\n';"#);
 
@@ -422,6 +423,7 @@ pub(crate) fn classify_ssh_error(stderr: &str) -> String {
 pub fn parse_snapshot(server_id: &str, output: &str) -> Result<Snapshot, String> {
     let sections = split_sections(output);
     let username = first_line(&sections, "USER").unwrap_or("unknown").to_string();
+    let uid_min = first_line(&sections, "UIDMIN").and_then(|value| value.parse::<u32>().ok()).unwrap_or(1000);
     let hostname = first_line(&sections, "HOST").unwrap_or("unknown").to_string();
     let os = first_line(&sections, "OS").unwrap_or("unknown|Linux");
     let (os_id, os_name) = os.split_once('|').unwrap_or(("unknown", "Linux"));
@@ -471,7 +473,7 @@ pub fn parse_snapshot(server_id: &str, output: &str) -> Result<Snapshot, String>
     let ps = parse_ps(sections.get("PS"));
     let pmon = parse_pmon(sections.get("GPUPMON"));
     let processes = parse_gpu_processes(sections.get("GPUPROC"), &gpus, &ps, &pmon, &username);
-    let cpu_processes = parse_cpu_processes(&ps, &username);
+    let cpu_processes = parse_cpu_processes(&ps, &processes, &username, uid_min);
     let processes_sampled = sections.contains_key("GPUPROC");
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| error.to_string())?.as_secs() as i64;
     Ok(Snapshot { server_id: server_id.into(), hostname, username, os_id: os_id.into(), os_name: os_name.into(), timestamp, status: if nvidia_smi == "available" { "online".into() } else { "warning".into() }, accelerator_vendor, system, gpus, disks, processes, cpu_processes, processes_sampled, nvidia_smi, nvidia_message })
@@ -599,6 +601,7 @@ fn parse_gpu(line: &str) -> Result<GpuMetric, String> {
 
 #[derive(Default)]
 struct PsInfo {
+    uid: u32,
     parent_pid: u32,
     process_group_id: u32,
     username: String,
@@ -613,13 +616,13 @@ fn parse_ps(lines: Option<&Vec<String>>) -> HashMap<u32, PsInfo> {
     let mut result = HashMap::new();
     for line in lines.into_iter().flatten() {
         let mut parts = line.split_whitespace();
-        let Some(username) = parts.next() else { continue }; let Some(_uid_text) = parts.next() else { continue };
+        let Some(username) = parts.next() else { continue }; let Some(uid_text) = parts.next() else { continue };
         let Some(pid_text) = parts.next() else { continue }; let Some(parent_pid_text) = parts.next() else { continue };
         let Some(process_group_text) = parts.next() else { continue }; let Some(cpu_text) = parts.next() else { continue };
         let Some(memory_text) = parts.next() else { continue }; let Some(rss_text) = parts.next() else { continue };
         let Some(elapsed) = parts.next() else { continue };
         let Ok(pid) = pid_text.parse::<u32>() else { continue };
-        result.insert(pid, PsInfo { parent_pid: parent_pid_text.parse().unwrap_or(0), process_group_id: process_group_text.parse().unwrap_or(0), username: username.into(), cpu: parse_number(cpu_text), memory_percent: parse_number(memory_text), rss_kb: rss_text.parse().unwrap_or(0), elapsed: elapsed.into(), command: parts.collect::<Vec<_>>().join(" ") });
+        result.insert(pid, PsInfo { uid: uid_text.parse().unwrap_or(0), parent_pid: parent_pid_text.parse().unwrap_or(0), process_group_id: process_group_text.parse().unwrap_or(0), username: username.into(), cpu: parse_number(cpu_text), memory_percent: parse_number(memory_text), rss_kb: rss_text.parse().unwrap_or(0), elapsed: elapsed.into(), command: parts.collect::<Vec<_>>().join(" ") });
     }
     result
 }
@@ -648,10 +651,34 @@ fn parse_gpu_processes(lines: Option<&Vec<String>>, gpus: &[GpuMetric], ps: &Has
     }).collect()
 }
 
-fn parse_cpu_processes(ps: &HashMap<u32, PsInfo>, current_user: &str) -> Vec<CpuProcessMetric> {
-    let mut entries: Vec<_> = ps.iter().collect();
+fn is_system_cpu_process(info: &PsInfo) -> bool {
+    let command = info.command.to_ascii_lowercase();
+    let executable = command.split_whitespace().next().unwrap_or_default().rsplit('/').next().unwrap_or_default();
+    const EXCLUDED_EXECUTABLES: &[&str] = &[
+        "systemd", "wireplumber", "pipewire", "pipewire-pulse", "dbus-daemon", "gnome-shell", "xorg", "xwayland", "pulseaudio",
+        "nvitop", "nvtop", "htop", "btop", "glances", "node_exporter",
+        "tailscale", "tailscaled", "zerotier-one", "openvpn", "openconnect", "wg-quick", "wireguard", "clash", "mihomo", "sing-box", "v2ray", "xray", "cloudflared", "charon", "strongswan", "globalprotect", "forticlient", "vpnagentd",
+    ];
+    const EXCLUDED_COMMAND_PATTERNS: &[&str] = &[
+        "nvitop", ".vscode-server", "code-server", ".cursor-server", "cursor-server", "codex", "claude", "pycharm_helpers", "remote-dev-server", "jetbrains",
+    ];
+    EXCLUDED_EXECUTABLES.contains(&executable) || EXCLUDED_COMMAND_PATTERNS.iter().any(|pattern| command.contains(pattern))
+}
+
+fn parse_cpu_processes(ps: &HashMap<u32, PsInfo>, gpu_processes: &[ProcessMetric], current_user: &str, uid_min: u32) -> Vec<CpuProcessMetric> {
+    let gpu_pids: HashSet<u32> = gpu_processes.iter().map(|process| process.pid).collect();
+    let child_pids: HashSet<u32> = ps.iter().filter(|(_, info)| gpu_pids.contains(&info.parent_pid)).map(|(pid, _)| *pid).collect();
+    let mut entries: Vec<_> = ps.iter().filter(|(pid, info)| {
+        let is_gpu_child = child_pids.contains(*pid);
+        let is_active_main = **pid == info.process_group_id && info.cpu > 0.0;
+        !gpu_pids.contains(*pid) && info.uid >= uid_min && info.rss_kb > 1024 * 1024 && !is_system_cpu_process(info) && (is_gpu_child || is_active_main)
+    }).collect();
     entries.sort_by(|(left_pid, left), (right_pid, right)| right.cpu.total_cmp(&left.cpu).then_with(|| left_pid.cmp(right_pid)));
-    entries.into_iter().map(|(pid, info)| CpuProcessMetric {
+
+    let mut main_count = 0;
+    entries.into_iter().filter(|(pid, _)| {
+        if child_pids.contains(*pid) { true } else if main_count < 12 { main_count += 1; true } else { false }
+    }).map(|(pid, info)| CpuProcessMetric {
         pid: *pid,
         parent_pid: info.parent_pid,
         username: info.username.clone(),
@@ -869,7 +896,7 @@ mod tests {
         assert!(snapshot.processes[0].is_group_leader);
         assert_eq!(snapshot.processes[0].sm_utilization, Some(73.0));
         assert_eq!(snapshot.processes[0].parent_pid, 1);
-        assert_eq!(snapshot.cpu_processes.len(), 8);
+        assert_eq!(snapshot.cpu_processes.len(), 2);
         assert!(snapshot.disks.is_empty());
         let disk = parse_disk("/mnt/data|250000|1000000|750000|50000").unwrap();
         assert_eq!(disk.used_bytes, 250_000 * 1024);
@@ -879,15 +906,15 @@ mod tests {
         assert!(parse_disk("/sys/firmware/efi/efivars|1|10|9|0").is_err());
         assert!(parse_disk("/boot/efi|1|10|9|0").is_err());
         assert!(parse_disk("/home|4|10|6|1").is_ok());
-        assert_eq!(snapshot.cpu_processes[0].pid, 4242);
-        assert_eq!(snapshot.cpu_processes[0].parent_pid, 1);
-        assert!(snapshot.cpu_processes[0].is_group_leader);
+        assert_eq!(snapshot.cpu_processes[0].pid, 4343);
+        assert_eq!(snapshot.cpu_processes[0].parent_pid, 4242);
+        assert!(!snapshot.cpu_processes[0].is_group_leader);
         assert!(snapshot.cpu_processes.iter().any(|process| process.pid == 5000));
-        assert!(snapshot.cpu_processes.iter().any(|process| process.pid == 6000));
-        assert!(snapshot.cpu_processes.iter().any(|process| process.pid == 99));
-        assert!(snapshot.cpu_processes.iter().any(|process| process.pid == 5500));
-        assert!(snapshot.cpu_processes.iter().any(|process| process.pid == 5800));
-        assert!(snapshot.cpu_processes.iter().any(|process| process.pid == 5900));
+        assert!(!snapshot.cpu_processes.iter().any(|process| process.pid == 6000));
+        assert!(!snapshot.cpu_processes.iter().any(|process| process.pid == 99));
+        assert!(!snapshot.cpu_processes.iter().any(|process| process.pid == 5500));
+        assert!(!snapshot.cpu_processes.iter().any(|process| process.pid == 5800));
+        assert!(!snapshot.cpu_processes.iter().any(|process| process.pid == 5900));
         assert_eq!(snapshot.system.memory_used_bytes, 25_000 * 1024);
         assert!((snapshot.system.cpu_utilization - 30.0).abs() < 0.01);
     }
@@ -979,12 +1006,18 @@ mod tests {
     }
 
     #[test]
-    fn cpu_processes_include_idle_small_system_and_nonleader_rows_without_a_count_limit() {
-        let rows: Vec<String> = (1..=100).map(|pid| format!("root 0 {pid} 1 1 0.0 0.0 4 00:01 system-worker")).collect();
-        let parsed = parse_cpu_processes(&parse_ps(Some(&rows)), "tongzh");
-        assert_eq!(parsed.len(), 100);
-        assert_eq!(parsed[99].pid, 100);
-        assert!(parsed.iter().all(|p| p.memory_used_bytes == 4096 && !p.is_current_user));
+    fn excludes_development_and_monitoring_services_from_cpu_tasks() {
+        for command in [
+            "/usr/bin/python3 /usr/bin/nvitop",
+            "/home/test/.vscode-server/bin/node server-main.js",
+            "/home/test/.codex/bin/codex app-server",
+            "/home/test/.local/bin/claude",
+            "/usr/bin/mihomo -d /etc/mihomo",
+            "/usr/sbin/openvpn --config client.conf",
+        ] {
+            assert!(is_system_cpu_process(&PsInfo { command: command.into(), ..Default::default() }));
+        }
+        assert!(!is_system_cpu_process(&PsInfo { command: "python train.py".into(), ..Default::default() }));
     }
 
     #[test]
