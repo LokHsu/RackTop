@@ -10,6 +10,8 @@
 - 修复 NVIDIA GB10 / DGX Spark 共享内存设备远端历史中的 GPU 显存与利用率记录，显存字段不可用时按共享内存池估算容量与占用。
 - 修复 GB10 / DGX Spark 把共享系统内存误判为专用 GPU 显存持续占用告警的问题。
 - 感谢 [CAN230921](https://github.com/CAN230921) 提交 [PR #147](https://github.com/Tongzh-SEU/RackTop/pull/147)，并关联 [Issue #93](https://github.com/Tongzh-SEU/RackTop/issues/93)。
+- 按 SSH 主机和端口隔离远端历史、用量、心跳、采集器 PID 与锁文件，修复共享用户目录造成的历史串台和采集互相抑制问题。
+- App 关闭后远端继续采集 GPU 温度、功耗和风扇数据，重新打开 App 时同步最新历史。
 
 ## 1.26.1
 
