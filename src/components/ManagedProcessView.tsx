@@ -5,7 +5,6 @@ import type { LaunchProfile, ManagedRun, ManagedRunRemoteStatus, Project, Server
 import { hasOtherUserGpuWorkload } from '../utils/gpu'
 import { currentUserProcessCount } from '../utils/processRelations'
 import { loadLaunchProfiles, loadManagedRuns, processBelongsToManagedRun, projectPathOnServer, projectWorkingDirectory, runIsObserved, runProcesses, saveLaunchProfiles, saveManagedRuns } from '../utils/managedRuns'
-import type { MineProcessWarning } from '../utils/mineProcessWarnings'
 import { elapsedSeconds, isGpuProcess, unmanagedProcessGroups } from '../utils/unmanagedProcessGroups'
 import type { UnmanagedProcessGroup } from '../utils/unmanagedProcessGroups'
 import { normalizeLaunchCommand, parseTaskParameters, replaceLaunchContext, resolveProjectLogPath, updateLaunchParameter } from '../utils/launchCommand'
@@ -110,15 +109,13 @@ function currentUserSnapshot(snapshot: Snapshot, runs: ManagedRun[]) {
   }
 }
 
-export function ManagedProcessView({ servers, snapshots, projects, warnings, launchIntent, initialTab = 'running', onLaunchIntentConsumed, onDismissWarning, onOpenTerminal, onNotice, onRefreshServer }: {
+export function ManagedProcessView({ servers, snapshots, projects, launchIntent, initialTab = 'running', onLaunchIntentConsumed, onOpenTerminal, onNotice, onRefreshServer }: {
   servers: Server[]
   snapshots: Record<string, Snapshot>
   projects: Project[]
-  warnings: MineProcessWarning[]
   launchIntent?: ManagedLaunchIntent | null
   initialTab?: ViewTab
   onLaunchIntentConsumed?: () => void
-  onDismissWarning: (warningId: string) => void
   onOpenTerminal: (serverId: string) => void
   onNotice: (message: string) => void
   onRefreshServer: (serverId: string) => Promise<void>
@@ -503,8 +500,7 @@ export function ManagedProcessView({ servers, snapshots, projects, warnings, lau
     </div>
 
     {tab === 'running' && <>
-      <div className="managed-process-summary"><span><strong>{activeRuns.length}</strong> 个任务</span><span><strong>{activeServerIds.size}</strong> 台服务器</span><span><strong>{activeRuns.reduce((sum, run) => sum + run.gpuUuids.length, 0)}</strong> 张 GPU</span>{warnings.some((warning) => warning.tone === 'warning') && <span className="is-warning">{warnings.filter((warning) => warning.tone === 'warning').length} 项需要注意</span>}</div>
-      {warnings.filter((warning) => warning.tone === 'warning').map((warning) => <div className="managed-process-warning" key={warning.id}><AlertCircle size={15} /><span>{warning.message}</span><button className="icon-button" onClick={() => onDismissWarning(warning.id)} aria-label="忽略"><X size={13} /></button></div>)}
+      <div className="managed-process-summary"><span><strong>{activeRuns.length}</strong> 个任务</span><span><strong>{activeServerIds.size}</strong> 台服务器</span><span><strong>{activeRuns.reduce((sum, run) => sum + run.gpuUuids.length, 0)}</strong> 张 GPU</span></div>
       {servers.filter((server) => activeRuns.some((run) => run.serverId === server.id)).map((server) => {
         const snapshot = snapshots[server.id]
         const serverRuns = activeRuns.filter((run) => run.serverId === server.id)

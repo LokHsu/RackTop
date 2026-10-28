@@ -28,8 +28,8 @@ it.each([
     await act(async () => button!.click())
   }
   try {
-    await act(async () => root.render(<ManagedProcessView servers={[]} snapshots={{}} projects={[]} warnings={[]}
-      initialTab="profiles" onDismissWarning={() => {}} onOpenTerminal={() => {}} onNotice={() => {}}
+    await act(async () => root.render(<ManagedProcessView servers={[]} snapshots={{}} projects={[]}
+      initialTab="profiles" onOpenTerminal={() => {}} onNotice={() => {}}
       onRefreshServer={async () => {}} />))
     await clickButton('调整并运行')
     const input = [...container.querySelectorAll('label')].find((item) => item.textContent === label)!
