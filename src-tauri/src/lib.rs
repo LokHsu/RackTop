@@ -966,6 +966,11 @@ fn save_settings(
     if !(2..=5).contains(&settings.max_cards_per_row) {
         return Err("每行最多卡片数必须为 2–5".into());
     }
+    if !settings.system_memory_threshold_percent.is_finite()
+        || !(80.0..=100.0).contains(&settings.system_memory_threshold_percent)
+    {
+        return Err("系统 MEM 告警阈值必须为 80–100%".into());
+    }
     database.save_settings(&settings)?;
     Ok(settings)
 }

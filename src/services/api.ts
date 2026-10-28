@@ -73,6 +73,7 @@ const defaultSettings: AppSettings = {
   idleMemoryThresholdMb: 40960,
   idleDurationMinutes: 10,
   idleNotificationsEnabled: true,
+  systemMemoryThresholdPercent: 90,
   temperatureThresholdCelsius: 85,
   currentUserAccent: '#0a84ff',
   theme: 'system',
