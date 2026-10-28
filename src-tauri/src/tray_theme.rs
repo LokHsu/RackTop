@@ -1,10 +1,13 @@
-// Windows does not recolor macOS template images. Keep the existing alpha mask
-// and choose the foreground from the system (taskbar), not application, theme.
+// Keep the logo in color; only recolor counters and badges for the taskbar theme.
 #[cfg(any(target_os = "windows", test))]
-pub(crate) fn colorize(mut rgba: Vec<u8>, dark_taskbar: bool) -> Vec<u8> {
+pub(crate) fn colorize(mut rgba: Vec<u8>, width: usize, dark_taskbar: bool) -> Vec<u8> {
     let foreground = if dark_taskbar { 255 } else { 0 };
-    for pixel in rgba.chunks_exact_mut(4) {
-        pixel[..3].fill(foreground);
+    for (index, pixel) in rgba.chunks_exact_mut(4).enumerate() {
+        let x = index % width;
+        let y = index / width;
+        if x >= 36 || (width == 36 && (26..32).contains(&x) && (4..10).contains(&y)) {
+            pixel[..3].fill(foreground);
+        }
     }
     rgba
 }
@@ -85,13 +88,27 @@ mod tests {
             for counts in [(0, 0), (12, 3)] {
                 let (original, width, height) = crate::render_tray_image(mode, counts.0, counts.1);
                 for dark in [false, true] {
-                    let colored = colorize(original.clone(), dark);
+                    let colored = colorize(original.clone(), width as usize, dark);
                     assert_eq!(colored.len(), (width * height * 4) as usize);
-                    for (before, after) in original.chunks_exact(4).zip(colored.chunks_exact(4)) {
+                    for (index, (before, after)) in original
+                        .chunks_exact(4)
+                        .zip(colored.chunks_exact(4))
+                        .enumerate()
+                    {
                         assert_eq!(before[3], after[3]);
-                        assert_eq!(&after[..3], &[if dark { 255 } else { 0 }; 3]);
+                        let x = index % width as usize;
+                        let y = index / width as usize;
+                        if x >= 36 || (width == 36 && (26..32).contains(&x) && (4..10).contains(&y))
+                        {
+                            assert_eq!(&after[..3], &[if dark { 255 } else { 0 }; 3]);
+                        } else {
+                            assert_eq!(before, after, "logo must retain its color");
+                        }
                     }
-                    assert_eq!(colorize(colored, !dark), colorize(original.clone(), !dark));
+                    assert_eq!(
+                        colorize(colored, width as usize, !dark),
+                        colorize(original.clone(), width as usize, !dark)
+                    );
                 }
             }
         }

@@ -642,12 +642,17 @@ async fn collect_disk_usage(app: AppHandle, database: State<'_, Database>, manag
 }
 
 #[tauri::command]
-fn get_disk_scan(database: State<'_, Database>, server_id: String) -> Result<Option<disk_scan::DiskScanState>, String> {
+fn get_disk_scan(
+    database: State<'_, Database>,
+    server_id: String,
+) -> Result<Option<disk_scan::DiskScanState>, String> {
     database.get_disk_scan(&server_id)
 }
 
 #[tauri::command]
-fn storage_maintenance_active(database: State<'_, Database>) -> bool { database.is_maintenance() }
+fn storage_maintenance_active(database: State<'_, Database>) -> bool {
+    database.is_maintenance()
+}
 
 #[tauri::command]
 async fn get_history(
@@ -686,7 +691,9 @@ async fn get_history_heatmap(
             timezone_offset_seconds,
             &gpu_uuids,
         )
-    }).await.map_err(|error| error.to_string())?
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -702,7 +709,9 @@ async fn get_usage_distribution(
             return Err("历史数据维护中，请稍等".into());
         }
         database.get_usage_distribution(&server_id, from_timestamp, requested_days)
-    }).await.map_err(|error| error.to_string())?
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -1161,20 +1170,6 @@ fn render_tray_image(
     let expanded = mode == "expanded";
     let width = if expanded { 78usize } else { 18usize };
     let mut rgba = vec![0u8; width * 18 * 4];
-    for x in 2..16 {
-        let y = if x < 6 {
-            10
-        } else if x < 9 {
-            5
-        } else if x < 12 {
-            12
-        } else {
-            7
-        };
-        for offset in 0..2 {
-            tray_pixel(&mut rgba, width, x, y + offset, 255);
-        }
-    }
 
     if !expanded && reservation_pending + process_warnings > 0 {
         tray_rect(&mut rgba, width, 13, 2, 3, 3, 255);
@@ -1200,19 +1195,62 @@ fn render_tray_image(
         tray_rect(&mut rgba, width, 54, 12, 2, 1, process_alpha);
         tray_count(&mut rgba, width, 62, process_warnings, process_alpha);
     }
-    (rgba, width as u32, 18)
+    // Render at 2x so the menu bar keeps an 18-point height on Retina displays.
+    let output_width = width * 2;
+    let mut output = vec![0; output_width * 36 * 4];
+    for y in 0..36 {
+        for x in 0..output_width {
+            let src = ((y / 2) * width + x / 2) * 4;
+            let dst = (y * output_width + x) * 4;
+            output[dst..dst + 4].copy_from_slice(&rgba[src..src + 4]);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    let logo = include_bytes!("../icons/tray/macos-template.rgba");
+    #[cfg(not(target_os = "macos"))]
+    let logo = include_bytes!("../icons/tray/color.rgba");
+    for y in 0..36 {
+        for x in 0..36 {
+            // Keep the existing compact-mode alert badge above the logo.
+            if !expanded
+                && reservation_pending + process_warnings > 0
+                && (26..32).contains(&x)
+                && (4..10).contains(&y)
+            {
+                continue;
+            }
+            let src = (y * 36 + x) * 4;
+            let dst = (y * output_width + x) * 4;
+            output[dst..dst + 4].copy_from_slice(&logo[src..src + 4]);
+        }
+    }
+    (output, output_width as u32, 36)
 }
 
 fn tray_image(mode: &str, reservation_pending: usize, process_warnings: usize) -> Image<'static> {
     let (rgba, width, height) = render_tray_image(mode, reservation_pending, process_warnings);
     #[cfg(target_os = "windows")]
-    let rgba = tray_theme::colorize(rgba, tray_theme::system_uses_dark_taskbar());
+    let rgba = tray_theme::colorize(rgba, width as usize, tray_theme::system_uses_dark_taskbar());
     Image::new_owned(rgba, width, height)
 }
 
 #[cfg(test)]
 mod tray_image_tests {
     use super::render_tray_image;
+
+    #[test]
+    fn tray_assets_have_transparent_edges_and_a_real_wave_cutout() {
+        let mask = include_bytes!("../icons/tray/macos-template.rgba");
+        let color = include_bytes!("../icons/tray/color.rgba");
+        assert_eq!(mask.len(), 36 * 36 * 4);
+        assert_eq!(color.len(), mask.len());
+        let alpha = |x: usize, y: usize| mask[(y * 36 + x) * 4 + 3];
+        assert_eq!(alpha(0, 0), 0);
+        assert_eq!(alpha(9, 9), 255);
+        assert_eq!(alpha(9, 19), 0, "wave must expose the background");
+        assert_eq!(color[3], 0, "no white border outside the logo");
+        assert!(color.chunks_exact(4).any(|p| p[3] > 200 && p[2] > p[0]));
+    }
 
     #[test]
     fn compact_and_expanded_images_keep_stable_dimensions() {
@@ -1222,10 +1260,10 @@ mod tray_image_tests {
         let (expanded_alert, expanded_alert_width, expanded_alert_height) =
             render_tray_image("expanded", 12, 3);
 
-        assert_eq!((compact_width, compact_height), (18, 18));
-        assert_eq!((alert_width, alert_height), (18, 18));
-        assert_eq!((expanded_width, expanded_height), (78, 18));
-        assert_eq!((expanded_alert_width, expanded_alert_height), (78, 18));
+        assert_eq!((compact_width, compact_height), (36, 36));
+        assert_eq!((alert_width, alert_height), (36, 36));
+        assert_eq!((expanded_width, expanded_height), (156, 36));
+        assert_eq!((expanded_alert_width, expanded_alert_height), (156, 36));
         assert_ne!(compact, compact_alert);
         assert_eq!(expanded.len(), expanded_alert.len());
         assert_ne!(expanded, expanded_alert);
@@ -1334,6 +1372,9 @@ fn build_application_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, Box<dyn s
         .build()?)
 }
 
+#[derive(Default)]
+struct TraySummaryState(Mutex<Option<(String, usize, usize)>>);
+
 #[tauri::command]
 fn update_tray_summary(
     app: AppHandle,
@@ -1346,13 +1387,25 @@ fn update_tray_summary(
     } else {
         "compact"
     };
-    let menu = build_tray_menu(&app, reservation_pending, process_warnings)
-        .map_err(|error| error.to_string())?;
+    let state = app.state::<TraySummaryState>();
+    let mut previous = state.0.lock().map_err(|error| error.to_string())?;
+    let next = (mode.to_string(), reservation_pending, process_warnings);
+    if previous.as_ref() == Some(&next) {
+        return Ok(());
+    }
+    let counts_changed = previous.as_ref().is_none_or(|(_, reservations, warnings)| {
+        *reservations != reservation_pending || *warnings != process_warnings
+    });
     let tray = app
         .tray_by_id("racktop-tray")
         .ok_or("找不到 RackTop 菜单栏图标")?;
-    tray.set_menu(Some(menu))
-        .map_err(|error| error.to_string())?;
+    // Replacing an unchanged native menu dismisses it while the user is reading it.
+    if counts_changed {
+        let menu = build_tray_menu(&app, reservation_pending, process_warnings)
+            .map_err(|error| error.to_string())?;
+        tray.set_menu(Some(menu))
+            .map_err(|error| error.to_string())?;
+    }
     #[cfg(target_os = "windows")]
     {
         let state = app.state::<tray_theme::WindowsTrayState>();
@@ -1361,7 +1414,7 @@ fn update_tray_summary(
     }
     tray.set_icon_with_as_template(
         Some(tray_image(mode, reservation_pending, process_warnings)),
-        true,
+        cfg!(target_os = "macos"),
     )
     .map_err(|error| error.to_string())?;
     tray.set_tooltip(Some(&format!(
@@ -1369,6 +1422,7 @@ fn update_tray_summary(
         reservation_pending, process_warnings
     )))
     .map_err(|error| error.to_string())?;
+    *previous = Some(next);
     Ok(())
 }
 
@@ -1468,10 +1522,31 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_menu(build_application_menu(&app.handle())?)?;
 
+            app.manage(TraySummaryState(Mutex::new(Some(("compact".into(), 0, 0)))));
             let menu = build_tray_menu(&app.handle(), 0, 0)?;
             TrayIconBuilder::with_id("racktop-tray")
                 .icon(tray_image("compact", 0, 0))
-                .icon_as_template(true)
+                .icon_as_template(cfg!(target_os = "macos"))
+                .show_menu_on_left_click(!cfg!(target_os = "windows"))
+                .on_tray_icon_event(|tray, event| {
+                    #[cfg(target_os = "windows")]
+                    if matches!(
+                        event,
+                        tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        }
+                    ) {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    let _ = (tray, event);
+                })
                 .tooltip("RackTop · GPU 与 CPU 监控")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id().as_ref() {

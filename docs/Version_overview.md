@@ -4,6 +4,11 @@
 
 ## 1.26.2
 
+- macOS 菜单栏图标采用波形镂空的单色 RackTop 标志，随菜单栏深浅背景显示。
+- Windows 和 Linux 托盘采用透明圆角的彩色 RackTop 标志。
+- Windows 托盘左键打开主窗口，右键显示菜单；Linux 保持原有点击行为。
+- 修复 macOS 托盘菜单因重复刷新而自动关闭的问题。
+
 - 精简“我的进程”运行页，移除异常汇总模块；任务结果在“最近结束”查看，保留任务结束通知与服务器告警。
 
 - 新增系统 MEM 超限告警，阈值可在“空闲与告警”中设置为 80%–100%，默认 90%。
@@ -11,7 +16,7 @@
 - 修复纯 CPU 服务器忽略 GPU 异常提醒后，总览仍显示无加速卡提醒的问题。感谢 [ChenxuLi-cxli](https://github.com/ChenxuLi-cxli) 提出 [Issue #108](https://github.com/Tongzh-SEU/RackTop/issues/108)。
 - 配置页恢复列表统一显示“已忽略的提醒”，忽略提示明确指向服务器“配置”页。
 - 保留重新打开时的显存预警忽略状态，确认异常恢复后自动移除对应恢复入口。
-- 修复 Windows 深色任务栏托盘图标看不清的问题，图标随系统任务栏深浅主题自动切换颜色。感谢 [Tommie-P-xl](https://github.com/Tommie-P-xl) 提出 [Issue #146](https://github.com/Tongzh-SEU/RackTop/issues/146)。
+- 修复 Windows 深色任务栏托盘图标看不清的问题，使用彩色标志，计数和告警角标随系统任务栏深浅主题切换颜色。感谢 [Tommie-P-xl](https://github.com/Tommie-P-xl) 提出 [Issue #146](https://github.com/Tongzh-SEU/RackTop/issues/146)。
 - 修复“我的进程”启动配置名称过长撑宽卡片的问题，过长名称显示省略号。感谢 [LokHsu](https://github.com/LokHsu) 提交 [PR #150](https://github.com/Tongzh-SEU/RackTop/pull/150)。
 - 优化启动配置的 GPU 数量和每卡最低空闲显存输入，支持清空编辑并在失焦时去除多余前导零。感谢 [LokHsu](https://github.com/LokHsu) 提交 [PR #150](https://github.com/Tongzh-SEU/RackTop/pull/150)。
 
