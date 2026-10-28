@@ -59,6 +59,11 @@ export function deriveGpuMemoryStallWarnings(
       })
     }
   }
-  for (const id of Object.keys(since)) if (!activeIds.has(id)) delete since[id]
+  // Missing samples (for example during reconnect) cannot establish recovery.
+  const unobservedPrefixes = servers.filter((server) => !snapshots[server.id])
+    .map((server) => `gpu-memory-stall:${server.id}:`)
+  for (const id of Object.keys(since)) {
+    if (!activeIds.has(id) && !unobservedPrefixes.some((prefix) => id.startsWith(prefix))) delete since[id]
+  }
   return { warnings, since }
 }

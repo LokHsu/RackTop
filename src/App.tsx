@@ -617,7 +617,7 @@ function App() {
     saveIgnoredNvidiaWarningIds(next)
     const snapshot = snapshotsRef.current[serverId]
     if (snapshot) setServers((current) => current.map((server) => server.id === serverId ? { ...server, status: displayedNvidiaServerStatus(snapshot, ignored) } : server))
-    setToast(ignored ? '已忽略此服务器的 GPU 异常提醒，可在采集与连接日志中恢复' : '已恢复 GPU 异常提醒')
+    setToast(ignored ? '已忽略此服务器的 GPU 异常提醒，可在服务器“配置”页恢复' : '已恢复 GPU 异常提醒')
   }, [])
 
   const refreshAll = useCallback(async (quiet = false, onSettled?: () => void) => {
@@ -1184,6 +1184,8 @@ function App() {
   }, [idleFilterHistory, idleHistoryReady, servers, snapshots])
 
   useEffect(() => {
+    // Startup has no samples yet; absence of data does not resolve ignored alerts.
+    if (Object.keys(snapshots).length === 0) return
     const now = Math.max(...Object.values(snapshots).map((snapshot) => snapshot.timestamp), 0)
     const result = deriveGpuMemoryStallWarnings(servers, snapshots, gpuMemoryStallSince.current, ignoredGpuMemoryStallWarningIds, now)
     gpuMemoryStallSince.current = result.since
@@ -1284,7 +1286,7 @@ function App() {
       return next
     })
     setGpuMemoryStallWarnings((current) => current.filter((item) => item.id !== warning.id))
-    setToast('已忽略此 GPU 的显存占用预警，可在服务器连接页恢复')
+    setToast('已忽略此 GPU 的显存占用预警，可在服务器“配置”页恢复')
   }, [])
 
   const restoreGpuMemoryStallWarning = useCallback((warningId: string) => {
@@ -1824,7 +1826,7 @@ function App() {
           ) : mainView === 'mine' ? (
             <ManagedProcessView servers={servers} snapshots={snapshots} projects={projects} warnings={mineProcessWarnings} launchIntent={managedLaunchIntent} onLaunchIntentConsumed={() => setManagedLaunchIntent(null)} onDismissWarning={(warningId) => { ignoredMineProcessWarningsRef.current.add(warningId); localStorage.setItem('racktop.ignoredMineProcessWarnings.v1', JSON.stringify([...ignoredMineProcessWarningsRef.current])); setMineProcessWarnings((current) => current.filter((warning) => warning.id !== warningId)) }} onOpenTerminal={(serverId) => { const server = servers.find((item) => item.id === serverId); if (server) setQuickTerminal({ server }) }} onNotice={setToast} onRefreshServer={(serverId) => refreshServer(serverId)} />
           ) : mainView === 'fleet' ? (
-            <FleetOverview onboarding={<OnboardingChecklist steps={onboardingSteps} previewStep={onboardingPreviewStep} collapsed={onboardingCollapsed} dismissed={onboardingDismissed} useActualState={onboardingUseActualState} showPreviewControls={!api.isDesktop} onPreviewStepChange={setOnboardingPreviewStep} onCollapsedChange={setOnboardingCollapsed} onDismiss={() => { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true); setToast('已隐藏新手引导，可在“设置 → 通用”中重新显示') }} onUseActualStateChange={setOnboardingUseActualState} />} servers={servers} snapshots={snapshots} settings={settings} totals={totals} sort={fleetSort} descending={fleetDescending} onSort={(next) => { setFleetSortMode('manual'); setFleetSort(next) }} onToggleOrder={() => { setFleetSortMode('manual'); setFleetDescending((value) => !value) }} onSelect={(serverId, tab, gpuUuid) => { setSelectedServerId(serverId); setSelectedGpuUuid(gpuUuid ?? null); setSelectedTab(tab); setMainView('server') }} onContextMenu={openServerContextMenu} />
+            <FleetOverview onboarding={<OnboardingChecklist steps={onboardingSteps} previewStep={onboardingPreviewStep} collapsed={onboardingCollapsed} dismissed={onboardingDismissed} useActualState={onboardingUseActualState} showPreviewControls={!api.isDesktop} onPreviewStepChange={setOnboardingPreviewStep} onCollapsedChange={setOnboardingCollapsed} onDismiss={() => { localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true'); setOnboardingDismissed(true); setToast('已隐藏新手引导，可在“设置 → 通用”中重新显示') }} onUseActualStateChange={setOnboardingUseActualState} />} servers={servers} snapshots={snapshots} ignoredNvidiaWarnings={ignoredNvidiaWarnings} settings={settings} totals={totals} sort={fleetSort} descending={fleetDescending} onSort={(next) => { setFleetSortMode('manual'); setFleetSort(next) }} onToggleOrder={() => { setFleetSortMode('manual'); setFleetDescending((value) => !value) }} onSelect={(serverId, tab, gpuUuid) => { setSelectedServerId(serverId); setSelectedGpuUuid(gpuUuid ?? null); setSelectedTab(tab); setMainView('server') }} onContextMenu={openServerContextMenu} />
           ) : selectedServer && selectedSnapshot && canDisplayServerDetails(selectedServer.status, true) ? (
             <ServerDetail
               server={selectedServer}
@@ -2384,7 +2386,7 @@ function ConnectionView({ server, snapshot, nvidiaWarningIgnored, ignoredGpuMemo
   const canRestoreNvidiaWarning = nvidiaWarningIgnored && snapshot.nvidiaSmi !== 'available'
   const ignoredMemoryWarnings = ignoredGpuMemoryStallGpus(server.id, snapshot, ignoredGpuMemoryStallWarningIds)
   const ignoredCount = ignoredMemoryWarnings.length + (canRestoreNvidiaWarning ? 1 : 0)
-  return <div className="content-stack"><section className="panel connection-panel"><PanelHeader icon={<KeyRound />} title="SSH 连接" subtitle="认证信息仅在本机使用" /><dl className="definition-list"><div><dt>物理位置</dt><dd>{server.location || '未填写'}</dd></div><div><dt>连接地址</dt><dd className="mono">{server.username}@{server.host}:{server.port}</dd></div><div><dt>认证</dt><dd>{isRackTopManagedIdentity(server.identityFile) ? 'RackTop 专用密钥' : server.authMethod === 'sshAgent' ? 'SSH Agent / 默认密钥' : server.authMethod === 'privateKey' ? '指定私钥' : server.authMethod === 'sshConfig' ? 'SSH Config' : '系统钥匙串密码'}</dd></div><div><dt>SSH Config</dt><dd>{server.sshAlias || '未使用别名'}</dd></div><div><dt>私钥</dt><dd className="mono">{server.identityFile || '由 OpenSSH 自动选择'}</dd></div><div><dt>ProxyJump</dt><dd className="mono">{server.proxyJump || '无'}</dd></div><div><dt>远端历史</dt><dd>{server.remoteHistoryEnabled ? `已启用 · ${server.remoteHistoryLastSyncAt ? `同步于 ${relativeTime(server.remoteHistoryLastSyncAt)}` : '等待首次同步'}` : '未启用'}</dd></div></dl><div className="panel__actions"><button className="button button--primary" onClick={onRefresh} disabled={isRefreshing}><RefreshCw size={16} className={isRefreshing ? 'spin' : ''} />测试并重新连接</button><button className="button button--secondary" onClick={onEdit}><Settings size={16} />编辑配置</button></div></section>{ignoredCount > 0 && <section className="panel ignored-warning-list"><PanelHeader icon={<BellOff />} title={`已忽略的 ${accelerator} 提醒`} subtitle={`${ignoredCount} 项提醒仅在此处保留`} /><div>{canRestoreNvidiaWarning && <div className="ignored-warning-row"><div><strong>GPU 读取异常</strong><p>不可读取的显卡仍会显示，但服务器状态暂按在线处理。</p></div><button className="button button--secondary button--small" onClick={onRestoreNvidiaWarning}><Bell size={14} />恢复提醒</button></div>}{ignoredMemoryWarnings.map((gpu) => <div className="ignored-warning-row" key={gpu.uuid}><div><strong>{accelerator} {gpu.index} · {gpu.name.replace(/^NVIDIA\s+/i, '')} 显存占用预警</strong><p>当前占用 {(gpu.memoryUsedMb / 1024).toFixed(1)} / {(gpu.memoryTotalMb / 1024).toFixed(1)} GB，UTL {clampPercent(gpu.utilization).toFixed(0)}%。</p></div><button className="button button--secondary button--small" onClick={() => onRestoreGpuMemoryStallWarning(`gpu-memory-stall:${server.id}:${gpu.uuid}`)}><Bell size={14} />恢复提醒</button></div>)}</div></section>}<ServerNotificationSettingsMenu settings={notificationSettings} onChange={onNotificationSettingsChange} openRequested={notificationMenuRequested} onOpenRequestHandled={onNotificationMenuRequestHandled} /><section className="panel danger-zone"><div><strong>删除服务器</strong><p>删除本机记录、历史数据、远端采集进程和服务器用户目录中的 RackTop 数据。</p></div><button className="button button--danger" onClick={onDelete}><Trash2 size={16} />删除</button></section></div>
+  return <div className="content-stack"><section className="panel connection-panel"><PanelHeader icon={<KeyRound />} title="SSH 连接" subtitle="认证信息仅在本机使用" /><dl className="definition-list"><div><dt>物理位置</dt><dd>{server.location || '未填写'}</dd></div><div><dt>连接地址</dt><dd className="mono">{server.username}@{server.host}:{server.port}</dd></div><div><dt>认证</dt><dd>{isRackTopManagedIdentity(server.identityFile) ? 'RackTop 专用密钥' : server.authMethod === 'sshAgent' ? 'SSH Agent / 默认密钥' : server.authMethod === 'privateKey' ? '指定私钥' : server.authMethod === 'sshConfig' ? 'SSH Config' : '系统钥匙串密码'}</dd></div><div><dt>SSH Config</dt><dd>{server.sshAlias || '未使用别名'}</dd></div><div><dt>私钥</dt><dd className="mono">{server.identityFile || '由 OpenSSH 自动选择'}</dd></div><div><dt>ProxyJump</dt><dd className="mono">{server.proxyJump || '无'}</dd></div><div><dt>远端历史</dt><dd>{server.remoteHistoryEnabled ? `已启用 · ${server.remoteHistoryLastSyncAt ? `同步于 ${relativeTime(server.remoteHistoryLastSyncAt)}` : '等待首次同步'}` : '未启用'}</dd></div></dl><div className="panel__actions"><button className="button button--primary" onClick={onRefresh} disabled={isRefreshing}><RefreshCw size={16} className={isRefreshing ? 'spin' : ''} />测试并重新连接</button><button className="button button--secondary" onClick={onEdit}><Settings size={16} />编辑配置</button></div></section>{ignoredCount > 0 && <section className="panel ignored-warning-list"><PanelHeader icon={<BellOff />} title="已忽略的提醒" subtitle={`${ignoredCount} 项提醒仅在此处保留`} /><div>{canRestoreNvidiaWarning && <div className="ignored-warning-row"><div><strong>GPU 读取异常</strong><p>不可读取的显卡仍会显示，但服务器状态暂按在线处理。</p></div><button className="button button--secondary button--small" onClick={onRestoreNvidiaWarning}><Bell size={14} />恢复提醒</button></div>}{ignoredMemoryWarnings.map((gpu) => <div className="ignored-warning-row" key={gpu.uuid}><div><strong>{accelerator} {gpu.index} · {gpu.name.replace(/^NVIDIA\s+/i, '')} 显存占用预警</strong><p>当前占用 {(gpu.memoryUsedMb / 1024).toFixed(1)} / {(gpu.memoryTotalMb / 1024).toFixed(1)} GB，UTL {clampPercent(gpu.utilization).toFixed(0)}%。</p></div><button className="button button--secondary button--small" onClick={() => onRestoreGpuMemoryStallWarning(`gpu-memory-stall:${server.id}:${gpu.uuid}`)}><Bell size={14} />恢复提醒</button></div>)}</div></section>}<ServerNotificationSettingsMenu settings={notificationSettings} onChange={onNotificationSettingsChange} openRequested={notificationMenuRequested} onOpenRequestHandled={onNotificationMenuRequestHandled} /><section className="panel danger-zone"><div><strong>删除服务器</strong><p>删除本机记录、历史数据、远端采集进程和服务器用户目录中的 RackTop 数据。</p></div><button className="button button--danger" onClick={onDelete}><Trash2 size={16} />删除</button></section></div>
 }
 
 function NvidiaWarning({ snapshot, onRefresh, onIgnore }: { snapshot: Snapshot; onRefresh: () => void; onIgnore: () => void }) {
@@ -2442,7 +2444,7 @@ function MasonryItem({ children }: { children: React.ReactNode }) {
   return <div className="masonry-item" ref={ref}>{children}</div>
 }
 
-function FleetOverview({ onboarding, servers, snapshots, settings, totals, sort, descending, onSort, onToggleOrder, onSelect, onContextMenu }: { onboarding?: React.ReactNode; servers: Server[]; snapshots: Record<string, Snapshot>; settings: AppSettings | null; totals: FleetTotals; sort: FleetSort; descending: boolean; onSort: (sort: FleetSort) => void; onToggleOrder: () => void; onSelect: (serverId: string, tab: DetailTab, gpuUuid?: string) => void; onContextMenu: (event: MouseEvent<HTMLElement>, server: Server) => void }) {
+function FleetOverview({ onboarding, servers, snapshots, ignoredNvidiaWarnings, settings, totals, sort, descending, onSort, onToggleOrder, onSelect, onContextMenu }: { onboarding?: React.ReactNode; servers: Server[]; snapshots: Record<string, Snapshot>; ignoredNvidiaWarnings: Set<string>; settings: AppSettings | null; totals: FleetTotals; sort: FleetSort; descending: boolean; onSort: (sort: FleetSort) => void; onToggleOrder: () => void; onSelect: (serverId: string, tab: DetailTab, gpuUuid?: string) => void; onContextMenu: (event: MouseEvent<HTMLElement>, server: Server) => void }) {
   const orderedServers = sortFleetServers(servers, snapshots, settings, sort, descending)
   return <div className="detail-page fleet-page">
     {onboarding}
@@ -2474,7 +2476,7 @@ function FleetOverview({ onboarding, servers, snapshots, settings, totals, sort,
             <div className="fleet-system">
               <button onClick={() => onSelect(server.id, 'cpu')}><span>CPU</span><strong>{clampPercent(snapshot.system.cpuUtilization).toFixed(0)}%</strong><i><b style={{ width: `${clampPercent(snapshot.system.cpuUtilization)}%` }} /></i></button>
             </div>
-            <div className="fleet-gpus">
+            {(snapshot.gpus.length > 0 || !ignoredNvidiaWarnings.has(server.id)) && <div className="fleet-gpus">
               <div className="fleet-gpus__labels"><span>设备</span><span>显存</span><span>{accelerator}</span></div>
               {snapshot.gpus.map((gpu) => {
                 if (!isGpuAvailable(gpu)) return <button className="fleet-gpu-row fleet-gpu-row--unavailable" key={gpu.uuid} onClick={() => onSelect(server.id, 'gpu', gpu.uuid)}>
@@ -2495,7 +2497,7 @@ function FleetOverview({ onboarding, servers, snapshots, settings, totals, sort,
                 </button>
               })}
               {snapshot.gpus.length === 0 && <button className="fleet-no-gpu" onClick={() => onSelect(server.id, 'connection')}><AlertCircle size={14} />未检测到受支持的加速卡</button>}
-            </div>
+            </div>}
             <footer className="fleet-card__footer"><span>{snapshot.gpus.filter((gpu) => isGpuIdle(gpu, settings?.idleGpuThreshold ?? 10)).length} 张 {accelerator} 空闲</span><time>{relativeTime(snapshot.timestamp)}</time></footer>
           </> : <div className="fleet-loading"><RefreshCw size={16} /><span>{server.lastError || '等待首次采样'}</span></div>}
         </article></MasonryItem>

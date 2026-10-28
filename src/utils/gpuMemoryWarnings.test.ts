@@ -84,4 +84,13 @@ describe('deriveGpuMemoryStallWarnings', () => {
     const result = deriveGpuMemoryStallWarnings([server], { s1: current }, { 'gpu-memory-stall:s1:gpu-0': 1000 }, new Set(), current.timestamp)
     expect(result.warnings).toHaveLength(1)
   })
+  it('preserves an unobserved server until a sample confirms recovery', () => {
+    const id = gpuMemoryStallWarningId(server.id, 'gpu-0')
+    const waiting = deriveGpuMemoryStallWarnings([server], {}, { [id]: 1000 }, new Set([id]), 5000)
+    expect(waiting.since[id]).toBe(1000)
+    const recovered = deriveGpuMemoryStallWarnings([server], { s1: snapshot(5000, 30) }, waiting.since, new Set([id]), 5000)
+    expect(recovered.since).toEqual({})
+    expect(recovered.warnings).toEqual([])
+  })
+
 })
