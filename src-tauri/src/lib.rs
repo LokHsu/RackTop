@@ -12,6 +12,7 @@ mod ssh_keys;
 pub mod storage;
 pub mod disk_scan;
 mod terminal;
+mod tray_theme;
 
 #[cfg(target_os = "windows")]
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -1199,6 +1200,8 @@ fn render_tray_image(
 
 fn tray_image(mode: &str, reservation_pending: usize, process_warnings: usize) -> Image<'static> {
     let (rgba, width, height) = render_tray_image(mode, reservation_pending, process_warnings);
+    #[cfg(target_os = "windows")]
+    let rgba = tray_theme::colorize(rgba, tray_theme::system_uses_dark_taskbar());
     Image::new_owned(rgba, width, height)
 }
 
@@ -1345,6 +1348,12 @@ fn update_tray_summary(
         .ok_or("找不到 RackTop 菜单栏图标")?;
     tray.set_menu(Some(menu))
         .map_err(|error| error.to_string())?;
+    #[cfg(target_os = "windows")]
+    {
+        let state = app.state::<tray_theme::WindowsTrayState>();
+        *state.0.lock().map_err(|error| error.to_string())? =
+            (mode.to_string(), reservation_pending, process_warnings);
+    }
     tray.set_icon_with_as_template(
         Some(tray_image(mode, reservation_pending, process_warnings)),
         true,
@@ -1409,6 +1418,8 @@ pub fn run() {
             app.manage(TerminalManager::default());
             app.manage(disk_scan::DiskScanManager::default());
             app.manage(InteractionLogStore::default());
+            #[cfg(target_os = "windows")]
+            app.manage(tray_theme::WindowsTrayState::default());
 
             app.state::<Database>().set_maintenance(true);
 
@@ -1473,6 +1484,8 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+            #[cfg(target_os = "windows")]
+            tray_theme::watch_system_theme(app.handle().clone());
             Ok(())
         })
         .on_menu_event(|app, event| match event.id().as_ref() {

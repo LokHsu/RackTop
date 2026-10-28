@@ -4,6 +4,7 @@
 
 ## 1.26.2
 
+- 修复 Windows 深色任务栏托盘图标看不清的问题，图标随系统任务栏深浅主题自动切换颜色。感谢 [Tommie-P-xl](https://github.com/Tommie-P-xl) 提出 [Issue #146](https://github.com/Tongzh-SEU/RackTop/issues/146)。
 - 修复“我的进程”启动配置名称过长撑宽卡片的问题，过长名称显示省略号。感谢 [LokHsu](https://github.com/LokHsu) 提交 [PR #150](https://github.com/Tongzh-SEU/RackTop/pull/150)。
 - 优化启动配置的 GPU 数量和每卡最低空闲显存输入，支持清空编辑并在失焦时去除多余前导零。感谢 [LokHsu](https://github.com/LokHsu) 提交 [PR #150](https://github.com/Tongzh-SEU/RackTop/pull/150)。
 
